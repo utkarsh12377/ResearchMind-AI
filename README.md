@@ -72,6 +72,7 @@ cd backend
 python -m venv .venv
 .venv\Scripts\activate      # Windows
 pip install -e ".[dev]"
+alembic upgrade head        # requires a running Postgres (see DATABASE_URL in .env)
 uvicorn app.main:app --reload
 ```
 
