@@ -8,7 +8,9 @@ so behavior matches Postgres for what these tests actually exercise.
 
 from collections.abc import AsyncGenerator
 
+import pytest
 import pytest_asyncio
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -18,7 +20,10 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401  (registers all models on Base.metadata)
+from app.core.rate_limit import limiter
 from app.db.base import Base
+from app.db.session import get_db
+from app.main import app as fastapi_app
 
 
 @pytest_asyncio.fixture
@@ -44,3 +49,26 @@ async def db_session(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     async with session_factory() as session:
         yield session
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter() -> None:
+    # The limiter's in-memory storage is process-global; without resetting it,
+    # request counts would leak between tests that hit the same endpoint.
+    limiter.reset()
+
+
+@pytest_asyncio.fixture
+async def client(engine: AsyncEngine) -> AsyncGenerator[AsyncClient, None]:
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
+        async with session_factory() as session:
+            yield session
+
+    fastapi_app.dependency_overrides[get_db] = override_get_db
+    transport = ASGITransport(app=fastapi_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+
+    fastapi_app.dependency_overrides.clear()

@@ -7,6 +7,7 @@ from app.db.base import Base
 from app.models.mixins import IdMixin, TimestampMixin
 
 if TYPE_CHECKING:
+    from app.models.api_key import ApiKey
     from app.models.paper import Paper
     from app.models.workspace import Workspace
 
@@ -24,6 +25,9 @@ class User(IdMixin, TimestampMixin, Base):
         back_populates="owner", cascade="all, delete-orphan"
     )
     papers: Mapped[list["Paper"]] = relationship(back_populates="uploaded_by")
+    api_keys: Mapped[list["ApiKey"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"User(id={self.id!r}, email={self.email!r})"

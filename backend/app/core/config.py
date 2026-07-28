@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     backend_cors_origins: list[str] = ["http://localhost:3000"]
 
     # --- Auth (used from Milestone 3 onward) ---
-    jwt_secret: str = "dev-only-secret-change-me"
+    jwt_secret: str = "dev-only-secret-change-me-to-a-random-64-char-value-in-production"
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 60
 

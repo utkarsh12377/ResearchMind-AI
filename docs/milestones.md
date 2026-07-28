@@ -9,7 +9,7 @@ the system design these milestones build toward.
       endpoint, Next.js shell, CI pipeline, docs skeleton.
 - [x] 2. Core backend architecture: settings, structured logging, exception handling, async DB
       session management, Alembic migrations, base domain models (User, Paper, Workspace).
-- [ ] 3. AuthN/AuthZ: JWT auth, register/login, API keys, roles, rate limiting.
+- [x] 3. AuthN/AuthZ: JWT auth, register/login, API keys, roles, rate limiting.
 - [ ] 4. Frontend shell: layout, dark mode, shadcn setup, auth pages, protected routing, typed API
       client + React Query.
 

@@ -6,12 +6,16 @@ requires-python = ">=3.10,<3.13"
 dependencies = [
     "fastapi>=0.115,<0.116",
     "uvicorn[standard]>=0.32,<0.33",
-    "pydantic>=2.9,<3.0",
+    "pydantic[email]>=2.9,<3.0",
     "pydantic-settings>=2.6,<3.0",
     "structlog>=24.4,<25.0",
     "sqlalchemy>=2.0,<2.1",
     "asyncpg>=0.30,<0.31",
     "alembic>=1.13,<2.0",
+    "pyjwt>=2.9,<3.0",
+    "bcrypt>=4.2,<5.0",
+    "slowapi>=0.1.9,<0.2",
+    "python-multipart>=0.0.12,<0.1",
 ]
 
 [project.optional-dependencies]
@@ -36,8 +40,13 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py310"
 extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom (`Depends(...)` as a default) is
+# intentional, not the mutable-default-argument bug B008 targets.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Header", "fastapi.Query"]
