@@ -1,0 +1,45 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# --- Node / Next.js ---
+node_modules/
+.next/
+out/
+.turbo/
+next-env.d.ts
+*.tsbuildinfo
+
+# --- Env / secrets ---
+.env
+.env.*
+!.env.example
+
+# --- Data / storage ---
+*.log
+data/
+storage/uploads/
+storage/vectors/
+*.sqlite3
+*.db
+
+# --- IDE / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Docker ---
+docker-compose.override.yml
