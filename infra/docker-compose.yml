@@ -39,8 +39,33 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-researchmind}:${POSTGRES_PASSWORD:-researchmind}@postgres:5432/${POSTGRES_DB:-researchmind}
       REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    volumes:
+      - paper-storage:/app/storage
     ports:
       - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: celery -A app.worker.celery_app.celery_app worker --loglevel=info
+    env_file:
+      - ../.env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-researchmind}:${POSTGRES_PASSWORD:-researchmind}@postgres:5432/${POSTGRES_DB:-researchmind}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    volumes:
+      - paper-storage:/app/storage
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,6 +110,7 @@ services:
       - neo4j-data:/data
 
 volumes:
+  paper-storage:
   postgres-data:
   redis-data:
   qdrant-data:

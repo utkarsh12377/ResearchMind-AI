@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Paper, PaperStatus, User, Workspace
+from tests.factories import make_paper
 
 
 @pytest.mark.asyncio
@@ -16,7 +17,7 @@ async def test_create_user_workspace_paper_relationships(db_session: AsyncSessio
     db_session.add(workspace)
     await db_session.flush()
 
-    paper = Paper(workspace=workspace, uploaded_by=user, title="A Survey of Graph RAG")
+    paper = make_paper(workspace=workspace, uploaded_by=user, title="A Survey of Graph RAG")
     db_session.add(paper)
     await db_session.commit()
 
@@ -42,7 +43,7 @@ async def test_user_email_must_be_unique(db_session: AsyncSession) -> None:
 async def test_deleting_workspace_cascades_to_papers(db_session: AsyncSession) -> None:
     user = User(email="owner@example.com", hashed_password="hashed")
     workspace = Workspace(name="Temp workspace", owner=user)
-    paper = Paper(workspace=workspace, uploaded_by=user, title="Some paper")
+    paper = make_paper(workspace=workspace, uploaded_by=user, title="Some paper")
     db_session.add_all([user, workspace, paper])
     await db_session.commit()
     paper_id = paper.id

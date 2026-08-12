@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
+    # Runs ingestion inline instead of dispatching to a worker. Lets the API be
+    # exercised end-to-end without a Redis/Celery process (tests, local dev).
+    celery_task_always_eager: bool = False
+
+    # --- Storage (used from Milestone 5 onward) ---
+    storage_local_path: str = "./storage"
+    max_upload_bytes: int = 100 * 1024 * 1024
 
     # --- Vector store (used from Milestone 12 onward) ---
     vector_store_backend: str = "faiss"

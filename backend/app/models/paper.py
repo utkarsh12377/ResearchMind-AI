@@ -2,7 +2,7 @@ import enum
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Enum, ForeignKey, String, Uuid
+from sqlalchemy import BigInteger, Enum, ForeignKey, Index, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -22,6 +22,12 @@ class PaperStatus(str, enum.Enum):
 
 class Paper(IdMixin, TimestampMixin, Base):
     __tablename__ = "papers"
+    __table_args__ = (
+        # Uploading the same file twice into one workspace should be rejected
+        # rather than silently duplicated; enforced in the DB so concurrent
+        # uploads can't race past a service-layer check.
+        Index("uq_papers_workspace_checksum", "workspace_id", "checksum", unique=True),
+    )
 
     workspace_id: Mapped[uuid.UUID] = mapped_column(
         Uuid, ForeignKey("workspaces.id"), nullable=False
@@ -31,6 +37,19 @@ class Paper(IdMixin, TimestampMixin, Base):
     status: Mapped[PaperStatus] = mapped_column(
         Enum(PaperStatus, name="paper_status"), default=PaperStatus.PENDING, nullable=False
     )
+
+    # --- Source file ---
+    original_filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    checksum: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    size_bytes: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(512), nullable=False)
+
+    # --- Extraction results (populated by the ingestion pipeline) ---
+    page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    abstract: Mapped[str | None] = mapped_column(Text, nullable=True)
+    authors: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     workspace: Mapped["Workspace"] = relationship(back_populates="papers")
     uploaded_by: Mapped["User"] = relationship(back_populates="papers")

@@ -33,6 +33,17 @@ class ConflictError(AppError):
     error_type = "conflict"
 
 
+class ValidationError(AppError):
+    """Input that is well-formed JSON but violates a business rule.
+
+    Distinct from FastAPI's request-schema validation, which rejects malformed
+    payloads before they reach the service layer.
+    """
+
+    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    error_type = "validation_error"
+
+
 class UnauthorizedError(AppError):
     status_code = status.HTTP_401_UNAUTHORIZED
     error_type = "unauthorized"

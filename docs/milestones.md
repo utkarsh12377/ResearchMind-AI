@@ -14,8 +14,8 @@ the system design these milestones build toward.
       client + React Query.
 
 ## Phase 1 — Ingestion Pipeline
-- [ ] 5. Paper upload & storage abstraction, Paper entity + status tracking, Celery skeleton.
-- [ ] 6. PDF parsing (PyMuPDF): text/layout extraction, metadata (title/authors/abstract).
+- [x] 5. Paper upload & storage abstraction, Paper entity + status tracking, Celery skeleton.
+- [x] 6. PDF parsing (PyMuPDF): text/layout extraction, metadata (title/authors/abstract).
 - [ ] 7. OCR pipeline for scanned papers (text-layer density check + Tesseract/PaddleOCR).
 - [ ] 8. Table & figure extraction (Docling/Camelot) with captions.
 - [ ] 9. Equation & reference/citation extraction, DOI/arXiv resolution.

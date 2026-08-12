@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.pool import StaticPool
 
 import app.models  # noqa: F401  (registers all models on Base.metadata)
+from app.core.config import get_settings
 from app.core.rate_limit import limiter
 from app.db.base import Base
 from app.db.session import get_db
@@ -35,6 +36,9 @@ async def engine() -> AsyncGenerator[AsyncEngine, None]:
         "sqlite+aiosqlite:///:memory:",
         poolclass=StaticPool,
         connect_args={"check_same_thread": False},
+        # echo=False regardless of app_debug: statement logging buries the
+        # actual assertion in failure output.
+        echo=False,
     )
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -49,6 +53,20 @@ async def db_session(engine: AsyncEngine) -> AsyncGenerator[AsyncSession, None]:
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     async with session_factory() as session:
         yield session
+
+
+@pytest.fixture(autouse=True)
+def _isolated_storage(tmp_path, monkeypatch) -> None:  # noqa: ANN001
+    """Point blob storage at a per-test temp directory.
+
+    get_settings() is lru_cached, so the cache is cleared on both sides of the
+    override to keep the patched path from leaking into other tests.
+    """
+    monkeypatch.setenv("STORAGE_LOCAL_PATH", str(tmp_path / "storage"))
+    get_settings.cache_clear()
+    yield
+    monkeypatch.delenv("STORAGE_LOCAL_PATH", raising=False)
+    get_settings.cache_clear()
 
 
 @pytest.fixture(autouse=True)
