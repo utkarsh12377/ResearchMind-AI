@@ -32,6 +32,13 @@ class Settings(BaseSettings):
 
     # --- Storage (used from Milestone 5 onward) ---
     storage_local_path: str = "./storage"
+
+    # --- Document understanding (used from Milestone 7 onward) ---
+    ocr_enabled: bool = True
+    ocr_language: str = "eng"
+    ocr_dpi: int = 300
+    extract_tables: bool = True
+    extract_figures: bool = True
     max_upload_bytes: int = 100 * 1024 * 1024
 
     # --- Vector store (used from Milestone 12 onward) ---

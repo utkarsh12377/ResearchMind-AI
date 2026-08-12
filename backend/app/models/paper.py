@@ -9,6 +9,7 @@ from app.db.base import Base
 from app.models.mixins import IdMixin, TimestampMixin
 
 if TYPE_CHECKING:
+    from app.models.paper_asset import PaperAsset
     from app.models.user import User
     from app.models.workspace import Workspace
 
@@ -50,9 +51,13 @@ class Paper(IdMixin, TimestampMixin, Base):
     abstract: Mapped[str | None] = mapped_column(Text, nullable=True)
     authors: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ocr_page_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     workspace: Mapped["Workspace"] = relationship(back_populates="papers")
     uploaded_by: Mapped["User"] = relationship(back_populates="papers")
+    assets: Mapped[list["PaperAsset"]] = relationship(
+        back_populates="paper", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"Paper(id={self.id!r}, title={self.title!r}, status={self.status!r})"

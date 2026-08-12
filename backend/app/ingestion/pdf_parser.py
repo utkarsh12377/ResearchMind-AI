@@ -14,6 +14,9 @@ from typing import BinaryIO
 
 import pymupdf
 
+from app.ingestion.assets import ExtractedFigure, ExtractedTable, extract_figures, extract_tables
+from app.ingestion.ocr import OcrEngine, ocr_document
+
 # Embedded PDF titles are frequently placeholders left by the authoring tool.
 _JUNK_TITLE_PATTERN = re.compile(
     r"^(untitled|microsoft word|document\d*|paper|manuscript|\d+|.*\.(dvi|tex|doc|docx|pdf|indd))$",
@@ -51,6 +54,9 @@ class ParsedDocument:
     authors: str | None = None
     abstract: str | None = None
     is_probably_scanned: bool = False
+    ocr_page_count: int = 0
+    tables: list[ExtractedTable] = field(default_factory=list)
+    figures: list[ExtractedFigure] = field(default_factory=list)
 
     @property
     def full_text(self) -> str:
@@ -142,8 +148,16 @@ def _extract_authors(metadata_author: str | None) -> str | None:
     return author
 
 
-def parse_pdf(source: BinaryIO) -> ParsedDocument:
-    """Parse a PDF into pages plus bibliographic metadata."""
+def parse_pdf(
+    source: BinaryIO,
+    *,
+    ocr_engine: OcrEngine | None = None,
+    enable_ocr: bool = True,
+    enable_tables: bool = True,
+    enable_figures: bool = True,
+    ocr_dpi: int = 300,
+) -> ParsedDocument:
+    """Parse a PDF into pages, assets, and bibliographic metadata."""
     source.seek(0)
     data = source.read()
 
@@ -157,6 +171,28 @@ def parse_pdf(source: BinaryIO) -> ParsedDocument:
             ParsedPage(number=index + 1, text=text, char_count=len(text.strip()))
             for index, text in enumerate(page.get_text("text") for page in document)
         ]
+
+        ocr_page_count = 0
+        if enable_ocr:
+            texts, ocr_page_count = ocr_document(
+                document,
+                [page.text for page in pages],
+                engine=ocr_engine,
+                dpi=ocr_dpi,
+            )
+            if ocr_page_count:
+                pages = [
+                    ParsedPage(number=index + 1, text=text, char_count=len(text.strip()))
+                    for index, text in enumerate(texts)
+                ]
+
+        tables: list[ExtractedTable] = []
+        figures: list[ExtractedFigure] = []
+        for index, page in enumerate(document):
+            if enable_tables:
+                tables.extend(extract_tables(page, index + 1))
+            if enable_figures:
+                figures.extend(extract_figures(page, index + 1))
 
         metadata = document.metadata or {}
         title = _clean(metadata.get("title"))
@@ -179,6 +215,9 @@ def parse_pdf(source: BinaryIO) -> ParsedDocument:
             authors=_extract_authors(metadata.get("author")),
             abstract=_extract_abstract(header_text),
             is_probably_scanned=is_probably_scanned,
+            ocr_page_count=ocr_page_count,
+            tables=tables,
+            figures=figures,
         )
     finally:
         document.close()

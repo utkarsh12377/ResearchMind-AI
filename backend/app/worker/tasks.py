@@ -3,18 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import uuid
 from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import TypeVar
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.core.storage import get_storage
-from app.ingestion.pdf_parser import PdfParseError, parse_pdf
-from app.models import Paper, PaperStatus
+from app.ingestion.pdf_parser import ParsedDocument, PdfParseError, parse_pdf
+from app.models import AssetKind, Paper, PaperAsset, PaperStatus
 from app.worker.celery_app import celery_app
 
 configure_logging()
@@ -70,9 +72,16 @@ async def _process_paper(db: AsyncSession, paper_id: uuid.UUID) -> dict[str, obj
     paper.error_message = None
     await db.commit()
 
+    settings = get_settings()
     try:
         with get_storage().open(paper.storage_key) as handle:
-            parsed = parse_pdf(handle)
+            parsed = parse_pdf(
+                handle,
+                enable_ocr=settings.ocr_enabled,
+                enable_tables=settings.extract_tables,
+                enable_figures=settings.extract_figures,
+                ocr_dpi=settings.ocr_dpi,
+            )
     except (PdfParseError, FileNotFoundError, OSError) as exc:
         logger.error("ingestion_failed", paper_id=str(paper_id), error=str(exc))
         paper.status = PaperStatus.FAILED
@@ -84,7 +93,10 @@ async def _process_paper(db: AsyncSession, paper_id: uuid.UUID) -> dict[str, obj
     paper.title = parsed.title or paper.original_filename
     paper.authors = parsed.authors
     paper.abstract = parsed.abstract
+    paper.ocr_page_count = parsed.ocr_page_count
     paper.status = PaperStatus.READY
+
+    await _replace_assets(db, paper, parsed)
     await db.commit()
 
     logger.info(
@@ -98,4 +110,46 @@ async def _process_paper(db: AsyncSession, paper_id: uuid.UUID) -> dict[str, obj
         "status": PaperStatus.READY.value,
         "page_count": parsed.page_count,
         "is_probably_scanned": parsed.is_probably_scanned,
+        "ocr_page_count": parsed.ocr_page_count,
+        "tables": len(parsed.tables),
+        "figures": len(parsed.figures),
     }
+
+
+async def _replace_assets(db: AsyncSession, paper: Paper, parsed: ParsedDocument) -> None:
+    """Persist extracted tables and figures, replacing any previous run's output.
+
+    Reprocessing a paper must not accumulate duplicates, so existing assets are
+    cleared first.
+    """
+    existing = await db.scalars(select(PaperAsset).where(PaperAsset.paper_id == paper.id))
+    for asset in existing:
+        await db.delete(asset)
+
+    for table in parsed.tables:
+        db.add(
+            PaperAsset(
+                paper_id=paper.id,
+                kind=AssetKind.TABLE,
+                page_number=table.page_number,
+                caption=table.caption,
+                content=table.markdown,
+            )
+        )
+
+    storage = get_storage()
+    for index, figure in enumerate(parsed.figures):
+        storage_key = None
+        if figure.image_png:
+            storage_key = f"figures/{paper.id}/p{figure.page_number}-{index}.png"
+            storage.save(storage_key, io.BytesIO(figure.image_png))
+
+        db.add(
+            PaperAsset(
+                paper_id=paper.id,
+                kind=AssetKind.FIGURE,
+                page_number=figure.page_number,
+                caption=figure.caption,
+                storage_key=storage_key,
+            )
+        )

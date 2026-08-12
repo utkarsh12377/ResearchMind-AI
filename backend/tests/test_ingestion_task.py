@@ -101,6 +101,73 @@ async def test_missing_paper_is_handled_gracefully(db_session: AsyncSession) -> 
 
 
 @pytest.mark.asyncio
+async def test_processing_persists_extracted_tables(db_session: AsyncSession) -> None:
+    from sqlalchemy import select
+
+    from app.models import AssetKind, PaperAsset
+    from tests.factories import build_pdf_with_table
+
+    paper = await _store_paper(db_session, build_pdf_with_table(), "tables.pdf")
+
+    result = await _process_paper(db_session, paper.id)
+
+    assert result["tables"] == 1
+    assets = list(
+        await db_session.scalars(
+            select(PaperAsset).where(
+                PaperAsset.paper_id == paper.id, PaperAsset.kind == AssetKind.TABLE
+            )
+        )
+    )
+    assert len(assets) == 1
+    assert "| Model | Accuracy | F1 |" in assets[0].content
+    assert assets[0].caption.startswith("Table 1")
+
+
+@pytest.mark.asyncio
+async def test_processing_persists_figures_with_stored_images(db_session: AsyncSession) -> None:
+    from sqlalchemy import select
+
+    from app.models import AssetKind, PaperAsset
+    from tests.factories import build_pdf_with_figure
+
+    paper = await _store_paper(db_session, build_pdf_with_figure(), "figures.pdf")
+
+    result = await _process_paper(db_session, paper.id)
+
+    assert result["figures"] == 1
+    asset = await db_session.scalar(
+        select(PaperAsset).where(
+            PaperAsset.paper_id == paper.id, PaperAsset.kind == AssetKind.FIGURE
+        )
+    )
+    assert asset is not None
+    assert asset.caption.startswith("Figure 1")
+    assert asset.storage_key is not None
+    assert get_storage().exists(asset.storage_key)
+
+
+@pytest.mark.asyncio
+async def test_reprocessing_replaces_assets_instead_of_duplicating(
+    db_session: AsyncSession,
+) -> None:
+    from sqlalchemy import func, select
+
+    from app.models import PaperAsset
+    from tests.factories import build_pdf_with_table
+
+    paper = await _store_paper(db_session, build_pdf_with_table(), "rerun.pdf")
+
+    await _process_paper(db_session, paper.id)
+    await _process_paper(db_session, paper.id)
+
+    count = await db_session.scalar(
+        select(func.count()).select_from(PaperAsset).where(PaperAsset.paper_id == paper.id)
+    )
+    assert count == 1
+
+
+@pytest.mark.asyncio
 async def test_run_with_session_works_inside_a_running_event_loop() -> None:
     """Regression: eager Celery runs the task inline inside the API's loop.
 

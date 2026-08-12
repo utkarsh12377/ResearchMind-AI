@@ -61,6 +61,60 @@ def build_pdf(
     return buffer
 
 
+def build_pdf_with_table(
+    *,
+    headers: tuple[str, ...] = ("Model", "Accuracy", "F1"),
+    rows: tuple[tuple[str, ...], ...] = (("BERT", "0.91", "0.89"), ("GPT-4", "0.95", "0.94")),
+    caption: str = "Table 1: Benchmark results on the evaluation split.",
+) -> io.BytesIO:
+    """A PDF containing a ruled table plus a caption beneath it.
+
+    PyMuPDF's table finder keys off ruling lines, so the grid is drawn
+    explicitly rather than relying on whitespace alignment.
+    """
+    document = pymupdf.open()
+    page = document.new_page()
+
+    left, top = 72.0, 120.0
+    col_width, row_height = 120.0, 24.0
+    all_rows = (headers, *rows)
+
+    for row_index, row in enumerate(all_rows):
+        for col_index, cell in enumerate(row):
+            x = left + col_index * col_width
+            y = top + row_index * row_height
+            page.draw_rect(pymupdf.Rect(x, y, x + col_width, y + row_height), width=0.8)
+            page.insert_text((x + 5, y + 16), cell, fontsize=10)
+
+    table_bottom = top + len(all_rows) * row_height
+    page.insert_text((left, table_bottom + 18), caption, fontsize=9)
+
+    buffer = io.BytesIO(document.tobytes())
+    document.close()
+    buffer.seek(0)
+    return buffer
+
+
+def build_pdf_with_figure(
+    caption: str = "Figure 1: Architecture of the proposed retrieval system.",
+) -> io.BytesIO:
+    """A PDF containing an embedded raster image plus a caption."""
+    document = pymupdf.open()
+    page = document.new_page()
+
+    # A solid 200x150 image, comfortably above the decorative-element threshold.
+    pixmap = pymupdf.Pixmap(pymupdf.csRGB, pymupdf.IRect(0, 0, 200, 150), False)
+    pixmap.set_rect(pixmap.irect, (40, 90, 200))
+    image_rect = pymupdf.Rect(72, 100, 272, 250)
+    page.insert_image(image_rect, pixmap=pixmap)
+    page.insert_text((72, 268), caption, fontsize=9)
+
+    buffer = io.BytesIO(document.tobytes())
+    document.close()
+    buffer.seek(0)
+    return buffer
+
+
 def build_scanned_pdf(pages: int = 2) -> io.BytesIO:
     """A PDF with no text layer, standing in for a scanned document."""
     document = pymupdf.open()

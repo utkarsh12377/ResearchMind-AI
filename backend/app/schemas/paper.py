@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 from app.models.paper import PaperStatus
+from app.models.paper_asset import AssetKind
 
 
 class PaperRead(BaseModel):
@@ -21,6 +22,7 @@ class PaperRead(BaseModel):
     abstract: str | None
     authors: str | None
     error_message: str | None
+    ocr_page_count: int
     created_at: datetime
     updated_at: datetime
 
@@ -28,3 +30,14 @@ class PaperRead(BaseModel):
 class PaperList(BaseModel):
     items: list[PaperRead]
     total: int
+
+
+class PaperAssetRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    kind: AssetKind
+    page_number: int
+    caption: str | None
+    content: str | None
+    storage_key: str | None

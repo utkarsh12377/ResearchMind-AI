@@ -155,3 +155,27 @@ async def test_delete_removes_the_paper(client: AsyncClient) -> None:
     assert delete_response.status_code == 204
 
     assert (await client.get(f"/api/v1/papers/{paper_id}", headers=headers)).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_assets_endpoint_requires_ownership(client: AsyncClient) -> None:
+    owner_headers = await _auth_headers(client, "assetowner@example.com")
+    created = await client.post("/api/v1/papers", files=_pdf_upload(), headers=owner_headers)
+    paper_id = created.json()["id"]
+
+    intruder_headers = await _auth_headers(client, "assetintruder@example.com")
+    response = await client.get(f"/api/v1/papers/{paper_id}/assets", headers=intruder_headers)
+
+    assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_assets_endpoint_returns_empty_list_before_processing(client: AsyncClient) -> None:
+    headers = await _auth_headers(client, "assets@example.com")
+    created = await client.post("/api/v1/papers", files=_pdf_upload(), headers=headers)
+    paper_id = created.json()["id"]
+
+    response = await client.get(f"/api/v1/papers/{paper_id}/assets", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == []

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.storage import build_storage_key, compute_checksum, get_storage
-from app.models import Paper, PaperStatus, User, Workspace
+from app.models import AssetKind, Paper, PaperAsset, PaperStatus, User, Workspace
 
 ALLOWED_CONTENT_TYPES = {"application/pdf"}
 
@@ -122,3 +122,17 @@ async def delete_paper(db: AsyncSession, user: User, paper_id: uuid.UUID) -> Non
     )
     if not still_referenced:
         get_storage().delete(paper.storage_key)
+
+
+async def list_paper_assets(
+    db: AsyncSession, user: User, paper_id: uuid.UUID, *, kind: AssetKind | None = None
+) -> list[PaperAsset]:
+    # Reuse get_paper so ownership is enforced before any asset is exposed.
+    paper = await get_paper(db, user, paper_id)
+
+    query = select(PaperAsset).where(PaperAsset.paper_id == paper.id)
+    if kind is not None:
+        query = query.where(PaperAsset.kind == kind)
+
+    result = await db.scalars(query.order_by(PaperAsset.page_number))
+    return list(result)
