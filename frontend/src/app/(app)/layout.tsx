@@ -1,0 +1,13 @@
+import { AuthGuard } from "@/components/auth/auth-guard";
+import { AppNav } from "@/components/layout/app-nav";
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthGuard>
+      <div className="flex flex-1">
+        <AppNav />
+        <main className="flex-1 overflow-y-auto">{children}</main>
+      </div>
+    </AuthGuard>
+  );
+}
