@@ -23,8 +23,8 @@ the system design these milestones build toward.
 
 ## Phase 2 — Embedding & Retrieval Core
 - [x] 11. Pluggable embedding provider interface (OpenAI/BGE/Jina) + batch embedding Celery tasks + cache.
-- [ ] 12. VectorStore abstraction: FAISS dev backend + Qdrant prod backend, collection schema.
-- [ ] 13. BM25 sparse index + hybrid RRF fusion.
+- [x] 12. VectorStore abstraction: FAISS dev backend + Qdrant prod backend, collection schema.
+- [x] 13. BM25 sparse index + hybrid RRF fusion.
 - [ ] 14. Cross-encoder reranking stage.
 - [ ] 15. Metadata filter DSL + citation-aware retrieval boosting.
 - [ ] 16. Retrieval API + basic streamed RAG chat endpoint with source citations.
