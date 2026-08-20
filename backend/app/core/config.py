@@ -42,8 +42,11 @@ class Settings(BaseSettings):
     max_upload_bytes: int = 100 * 1024 * 1024
 
     # --- Vector store (used from Milestone 12 onward) ---
-    vector_store_backend: str = "faiss"
+    # "memory" needs no extra dependency and is exact; "faiss" scales further
+    # locally; "qdrant" is the production backend.
+    vector_store_backend: str = "memory"
     qdrant_url: str = "http://localhost:6333"
+    qdrant_collection: str = "researchmind_chunks"
     qdrant_api_key: str = ""
 
     # --- Knowledge graph (used from Milestone 26 onward) ---
@@ -58,7 +61,12 @@ class Settings(BaseSettings):
     default_llm_provider: str = "openai"
 
     # --- Embeddings (used from Milestone 11 onward) ---
-    embedding_provider: str = "openai"
+    # "hash" is a deterministic local provider with no network dependency; it
+    # lets the retrieval stack run end-to-end without API keys.
+    embedding_provider: str = "hash"
+    embedding_model: str = "text-embedding-3-small"
+    embedding_dimensions: int = 384
+    embedding_batch_size: int = 64
     jina_api_key: str = ""
 
 

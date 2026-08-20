@@ -25,6 +25,8 @@ from app.models import (
     PaperReference,
     PaperStatus,
 )
+from app.retrieval.embeddings import EmbeddingError
+from app.retrieval.indexer import index_paper
 from app.worker.celery_app import celery_app
 
 configure_logging()
@@ -66,8 +68,20 @@ def _run_with_session(operation: Callable[[AsyncSession], Awaitable[T]]) -> T:
 
 @celery_app.task(name="ingestion.process_paper", bind=True, max_retries=2)
 def process_paper(self, paper_id: str) -> dict[str, object]:  # noqa: ANN001
-    """Parse an uploaded paper and record the extracted metadata."""
-    return _run_with_session(lambda session: _process_paper(session, uuid.UUID(paper_id)))
+    """Parse an uploaded paper, then queue it for embedding.
+
+    Chaining happens here rather than inside `_process_paper` so that function
+    stays pure database work -- callable from tests and from a future
+    synchronous reprocess endpoint without needing a live broker.
+    """
+    result = _run_with_session(lambda session: _process_paper(session, uuid.UUID(paper_id)))
+
+    # Embedding is a separate task so a transient provider outage retries on
+    # its own without re-parsing the PDF.
+    if result.get("status") == PaperStatus.READY.value:
+        embed_paper.delay(paper_id)
+
+    return result
 
 
 async def _process_paper(db: AsyncSession, paper_id: uuid.UUID) -> dict[str, object]:
@@ -239,3 +253,19 @@ async def _replace_chunks(db: AsyncSession, paper: Paper, parsed: ParsedDocument
         )
 
     return len(chunks)
+
+
+@celery_app.task(name="ingestion.embed_paper", bind=True, max_retries=3, default_retry_delay=30)
+def embed_paper(self, paper_id: str, reindex: bool = False) -> dict[str, object]:  # noqa: ANN001
+    """Embed a paper's chunks into the vector store."""
+    try:
+        count = _run_with_session(
+            lambda session: index_paper(session, uuid.UUID(paper_id), reindex=reindex)
+        )
+    except EmbeddingError as exc:
+        # Provider outages and rate limits are transient; a bad API key is not,
+        # but Celery's retry cap bounds the damage either way.
+        logger.warning("embedding_failed", paper_id=paper_id, error=str(exc))
+        raise self.retry(exc=exc) from exc
+
+    return {"paper_id": paper_id, "chunks_indexed": count}

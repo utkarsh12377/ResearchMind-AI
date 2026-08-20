@@ -22,7 +22,7 @@ the system design these milestones build toward.
 - [x] 10. Layout-aware hierarchical chunking (paper -> section -> paragraph/table/figure nodes).
 
 ## Phase 2 — Embedding & Retrieval Core
-- [ ] 11. Pluggable embedding provider interface (OpenAI/BGE/Jina) + batch embedding Celery tasks + cache.
+- [x] 11. Pluggable embedding provider interface (OpenAI/BGE/Jina) + batch embedding Celery tasks + cache.
 - [ ] 12. VectorStore abstraction: FAISS dev backend + Qdrant prod backend, collection schema.
 - [ ] 13. BM25 sparse index + hybrid RRF fusion.
 - [ ] 14. Cross-encoder reranking stage.
