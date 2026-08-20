@@ -27,13 +27,13 @@ the system design these milestones build toward.
 - [x] 13. BM25 sparse index + hybrid RRF fusion.
 - [x] 14. Cross-encoder reranking stage.
 - [x] 15. Metadata filter DSL + citation-aware retrieval boosting.
-- [ ] 16. Retrieval API + basic streamed RAG chat endpoint with source citations.
+- [x] 16. Retrieval API + basic streamed RAG chat endpoint with source citations.
 
 ## Phase 3 — LLM Gateway & Reasoning
-- [ ] 17. LLM Gateway: multi-provider, streaming, retries/fallback, token accounting, prompt registry.
-- [ ] 18. Context compression / long-context optimization (recursive summarization, token budget manager).
-- [ ] 19. Self-RAG / Corrective RAG loop (retrieval sufficiency scoring + corrective re-retrieval).
-- [ ] 20. Reflection & verification agent (answer-vs-source check, hallucination flagging, confidence score).
+- [x] 17. LLM Gateway: multi-provider, streaming, retries/fallback, token accounting, prompt registry.
+- [x] 18. Context compression / long-context optimization (recursive summarization, token budget manager).
+- [x] 19. Self-RAG / Corrective RAG loop (retrieval sufficiency scoring + corrective re-retrieval).
+- [x] 20. Reflection & verification agent (answer-vs-source check, hallucination flagging, confidence score).
 
 ## Phase 4 — Multi-Agent System (LangGraph)
 - [ ] 21. LangGraph skeleton: state schema, Planner + Retriever agent nodes, streamed intermediate steps.
