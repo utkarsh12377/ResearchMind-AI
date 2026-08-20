@@ -10,6 +10,8 @@ from app.models.mixins import IdMixin, TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.document_chunk import DocumentChunk
+    from app.models.experiment_result import ExperimentResult
+    from app.models.extracted_entity import ExtractedEntity
     from app.models.paper_asset import PaperAsset
     from app.models.paper_reference import PaperReference
     from app.models.user import User
@@ -54,6 +56,8 @@ class Paper(IdMixin, TimestampMixin, Base):
     authors: Mapped[str | None] = mapped_column(Text, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     ocr_page_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    published_year: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    venue: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     workspace: Mapped["Workspace"] = relationship(back_populates="papers")
     uploaded_by: Mapped["User"] = relationship(back_populates="papers")
@@ -64,6 +68,12 @@ class Paper(IdMixin, TimestampMixin, Base):
         back_populates="paper", cascade="all, delete-orphan"
     )
     chunks: Mapped[list["DocumentChunk"]] = relationship(
+        back_populates="paper", cascade="all, delete-orphan"
+    )
+    entities: Mapped[list["ExtractedEntity"]] = relationship(
+        back_populates="paper", cascade="all, delete-orphan"
+    )
+    experiments: Mapped[list["ExperimentResult"]] = relationship(
         back_populates="paper", cascade="all, delete-orphan"
     )
 

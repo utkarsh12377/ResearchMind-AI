@@ -2,6 +2,8 @@
 
 from app.models.api_key import ApiKey
 from app.models.document_chunk import DocumentChunk
+from app.models.experiment_result import ExperimentResult
+from app.models.extracted_entity import ExtractedEntity
 from app.models.paper import Paper, PaperStatus
 from app.models.paper_asset import AssetKind, PaperAsset
 from app.models.paper_reference import PaperReference
@@ -12,6 +14,8 @@ __all__ = [
     "ApiKey",
     "AssetKind",
     "DocumentChunk",
+    "ExperimentResult",
+    "ExtractedEntity",
     "Paper",
     "PaperAsset",
     "PaperReference",
