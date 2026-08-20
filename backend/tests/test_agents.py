@@ -437,3 +437,92 @@ async def test_injected_web_results_are_dropped_not_passed_to_the_model(
     assert len(result["web_results"]) == 1
     assert result["web_results"][0].title == "Clean"
     assert "prompt injection" in result["steps"][0].detail
+
+
+@pytest.mark.asyncio
+async def test_graph_retriever_adds_papers_dense_search_missed(
+    db_session: AsyncSession, provider, store, bm25  # noqa: ANN001
+) -> None:
+    """The two retrievers fail in different directions, so both run."""
+    from app.agents.agents import graph_retriever_agent
+    from app.graph.builder import build_paper_graph
+    from app.graph.store import InMemoryGraphStore
+    from app.retrieval.service import retrieve
+
+    graph_store = InMemoryGraphStore()
+    first, user = await _ingest(db_session, provider, store, bm25, body="We evaluate BERT on SQuAD.")
+    await build_paper_graph(db_session, first.id, store=graph_store, use_llm=False)
+
+    second = await _store_paper(db_session, build_pdf(body="A later study, also on SQuAD."), "b.pdf")
+    await _process_paper(db_session, second.id)
+    await index_paper(db_session, second.id, provider=provider, store=store)
+    await rebuild_sparse_index(db_session, bm25=bm25)
+    await build_paper_graph(db_session, second.id, store=graph_store, use_llm=False)
+
+    context = AgentContext(
+        db_session,
+        user,
+        LLMGateway(ScriptedProvider([])),
+        provider=provider,
+        store=store,
+        bm25=bm25,
+    )
+
+    seeded = await retrieve(
+        db_session, user, "SQuAD", limit=1, provider=provider, store=store, bm25=bm25
+    )
+    state = initial_state("SQuAD results", user.id, limit=4)
+    state["chunks"] = seeded
+
+    result = await graph_retriever_agent(state, context)
+
+    assert len(result["chunks"]) >= len(seeded)
+    assert result["steps"][0].agent == "graph_retriever"
+
+
+@pytest.mark.asyncio
+async def test_graph_retriever_is_a_no_op_without_connections(
+    db_session: AsyncSession, provider, store, bm25  # noqa: ANN001
+) -> None:
+    from app.agents.agents import graph_retriever_agent
+
+    _, user = await _ingest(db_session, provider, store, bm25, body="Unrelated content.")
+    context = AgentContext(
+        db_session,
+        user,
+        LLMGateway(ScriptedProvider([])),
+        provider=provider,
+        store=store,
+        bm25=bm25,
+    )
+
+    state = initial_state("quantum chromodynamics", user.id)
+    result = await graph_retriever_agent(state, context)
+
+    assert result["graph_paths"] == []
+    assert "No graph connections" in result["steps"][0].summary
+
+
+@pytest.mark.asyncio
+async def test_graph_retriever_failure_does_not_abort_the_run(
+    db_session: AsyncSession, provider, store, bm25  # noqa: ANN001
+) -> None:
+    """Every agent is individually failure-tolerant; this one is no exception."""
+    import app.agents.agents as agents_module
+    from app.agents.agents import graph_retriever_agent
+
+    _, user = await _ingest(db_session, provider, store, bm25, body="Evaluated on GLUE.")
+    context = AgentContext(db_session, user, LLMGateway(ScriptedProvider([])))
+
+    async def explode(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        raise RuntimeError("graph unavailable")
+
+    original = agents_module.graph_expand
+    agents_module.graph_expand = explode
+    try:
+        result = await graph_retriever_agent(initial_state("GLUE", user.id), context)
+    finally:
+        agents_module.graph_expand = original
+
+    assert result["errors"]
+    assert "failed" in result["steps"][0].summary

@@ -19,6 +19,7 @@ from app.agents.prompts import CRITIQUE, PLAN, REASON, REPORT, REVISE, SUMMARIZE
 from app.agents.state import AgentName, Intent, Plan, ResearchState, Step
 from app.agents.tools import SearchTool, get_search_tool, wrap_untrusted
 from app.core.logging import get_logger
+from app.graph.retrieval import expand as graph_expand
 from app.llm.context import pack_context
 from app.llm.gateway import LLMGateway, Message, Role
 from app.llm.prompts import format_sources
@@ -178,6 +179,64 @@ async def retriever_agent(state: ResearchState, context: AgentContext) -> dict:
         ],
     }
 
+
+# --- Graph retriever -------------------------------------------------------
+
+
+@resilient(AgentName.GRAPH_RETRIEVER)
+async def graph_retriever_agent(state: ResearchState, context: AgentContext) -> dict:
+    """Pull in papers the graph connects to the question, not just similar text.
+
+    Runs after dense retrieval and adds to it rather than replacing it. The two
+    retrievers fail in different directions: vector search misses a paper that
+    never phrases things the way the question does, and the graph misses one
+    that shares no extracted entity. Neither is a superset of the other.
+    """
+    started = time.time()
+    existing = state.get("chunks", [])
+    already_seen = [chunk.paper_id for chunk in existing]
+
+    context_view = await graph_expand(
+        context.db,
+        context.user,
+        state["question"],
+        exclude_paper_ids=already_seen,
+    )
+    if not context_view.paths:
+        return {
+            "graph_paths": [],
+            "steps": [
+                _step(AgentName.GRAPH_RETRIEVER, "No graph connections found", started)
+            ],
+        }
+
+    filters = RetrievalFilters(paper_ids=context_view.paper_ids)
+    related = await retrieve(
+        context.db,
+        context.user,
+        state["question"],
+        limit=max(2, state.get("limit", 8) // 2),
+        filters=filters,
+        **context.retrieval_kwargs,
+    )
+
+    seen = {chunk.chunk_id for chunk in existing}
+    merged = list(existing)
+    merged.extend(chunk for chunk in related if chunk.chunk_id not in seen)
+
+    return {
+        "chunks": merged,
+        "graph_paths": [path.describe() for path in context_view.paths],
+        "steps": [
+            _step(
+                AgentName.GRAPH_RETRIEVER,
+                f"Added {len(merged) - len(existing)} passage(s) from "
+                f"{len(context_view.paper_ids)} graph-linked paper(s)",
+                started,
+                context_view.summary(),
+            )
+        ],
+    }
 
 # --- Web search ------------------------------------------------------------
 
@@ -523,6 +582,7 @@ def serialize_state(state: ResearchState) -> dict:
         "revision_count": state.get("revision_count", 0),
         "usage_tokens": state.get("usage_tokens", 0),
         "errors": state.get("errors", []),
+        "graph_paths": state.get("graph_paths", []),
         "steps": [step.as_dict() for step in state.get("steps", [])],
         "sources": [
             {
@@ -543,6 +603,7 @@ __all__ = [
     "AgentContext",
     "citation_agent",
     "critic_agent",
+    "graph_retriever_agent",
     "planner_agent",
     "ranker_agent",
     "reasoner_agent",
