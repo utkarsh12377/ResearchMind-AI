@@ -450,10 +450,14 @@ async def test_graph_retriever_adds_papers_dense_search_missed(
     from app.retrieval.service import retrieve
 
     graph_store = InMemoryGraphStore()
-    first, user = await _ingest(db_session, provider, store, bm25, body="We evaluate BERT on SQuAD.")
+    first, user = await _ingest(
+        db_session, provider, store, bm25, body="We evaluate BERT on SQuAD."
+    )
     await build_paper_graph(db_session, first.id, store=graph_store, use_llm=False)
 
-    second = await _store_paper(db_session, build_pdf(body="A later study, also on SQuAD."), "b.pdf")
+    second = await _store_paper(
+        db_session, build_pdf(body="A later study, also on SQuAD."), "b.pdf"
+    )
     await _process_paper(db_session, second.id)
     await index_paper(db_session, second.id, provider=provider, store=store)
     await rebuild_sparse_index(db_session, bm25=bm25)

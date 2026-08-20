@@ -39,7 +39,9 @@ async def test_seeds_come_from_entities_actually_in_the_corpus(
 ) -> None:
     await _ingest(db_session, store, filename="a.pdf", body="We evaluate on SQuAD.")
 
-    seeds = await find_seed_entities(db_session, "how does SQuAD work", await _paper_ids(db_session))
+    seeds = await find_seed_entities(
+        db_session, "how does SQuAD work", await _paper_ids(db_session)
+    )
 
     assert "squad" in {seed.key for seed in seeds}
 
