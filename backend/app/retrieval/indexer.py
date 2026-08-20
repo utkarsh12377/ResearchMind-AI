@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logging import get_logger
 from app.models import DocumentChunk, Paper
 from app.retrieval.embeddings import EmbeddingProvider, get_embedding_provider
+from app.retrieval.sparse import BM25Index, get_bm25_index
 from app.retrieval.vector_store import VectorRecord, VectorStore, get_vector_store
 
 logger = get_logger(__name__)
@@ -26,6 +27,7 @@ async def index_paper(
     *,
     provider: EmbeddingProvider | None = None,
     store: VectorStore | None = None,
+    bm25: BM25Index | None = None,
     batch_size: int = 64,
     reindex: bool = False,
 ) -> int:
@@ -37,6 +39,9 @@ async def index_paper(
     """
     provider = provider or get_embedding_provider()
     store = store or get_vector_store()
+    # Dense and sparse must stay in sync: a paper indexed into only one of
+    # them is invisible to half of hybrid retrieval until the next restart.
+    bm25 = bm25 if bm25 is not None else get_bm25_index()
 
     paper = await db.get(Paper, paper_id)
     if paper is None:
@@ -52,9 +57,10 @@ async def index_paper(
         return 0
 
     if reindex:
-        # Drop the old vectors first: chunk ids change when text is re-chunked,
+        # Drop the old entries first: chunk ids change when text is re-chunked,
         # so stale entries would otherwise linger and be retrievable forever.
         await store.delete_by_paper(paper_id)
+        bm25.remove_paper(paper_id)
 
     indexed = 0
     for batch in _batched(chunks, batch_size):
@@ -80,6 +86,20 @@ async def index_paper(
             ]
         )
 
+        for chunk in batch:
+            bm25.add(
+                chunk.id,
+                paper.id,
+                chunk.content,
+                {
+                    "chunk_id": str(chunk.id),
+                    "paper_id": str(paper.id),
+                    "workspace_id": str(paper.workspace_id),
+                    "kind": chunk.kind,
+                    "section_path": chunk.section_path or "",
+                },
+            )
+
         await db.execute(
             update(DocumentChunk)
             .where(DocumentChunk.id.in_([chunk.id for chunk in batch]))
@@ -97,7 +117,12 @@ async def index_paper(
 
 
 async def remove_paper_from_index(
-    paper_id: uuid.UUID, *, store: VectorStore | None = None
+    paper_id: uuid.UUID,
+    *,
+    store: VectorStore | None = None,
+    bm25: BM25Index | None = None,
 ) -> int:
     store = store or get_vector_store()
+    bm25 = bm25 if bm25 is not None else get_bm25_index()
+    bm25.remove_paper(paper_id)
     return await store.delete_by_paper(paper_id)

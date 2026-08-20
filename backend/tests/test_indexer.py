@@ -169,3 +169,44 @@ async def test_batching_indexes_every_chunk(
 
     assert indexed > 1
     assert await store.count() == indexed
+
+
+@pytest.mark.asyncio
+async def test_indexing_populates_the_sparse_index_too(
+    db_session: AsyncSession, provider, store  # noqa: ANN001
+) -> None:
+    """Regression: papers were dense-indexed but not added to BM25.
+
+    That left every newly uploaded paper invisible to sparse retrieval — and so
+    to half of hybrid search — until the next process restart rebuilt the index.
+    """
+    from app.retrieval.sparse import BM25Index
+    from tests.factories import build_pdf
+
+    bm25 = BM25Index()
+    paper = await _store_paper(db_session, build_pdf(body="Sparse indexing check."), "sparse.pdf")
+    await _process_paper(db_session, paper.id)
+
+    indexed = await index_paper(db_session, paper.id, provider=provider, store=store, bm25=bm25)
+
+    assert indexed > 0
+    assert bm25.size == indexed
+    assert bm25.search("sparse indexing")
+
+
+@pytest.mark.asyncio
+async def test_removing_a_paper_clears_both_indexes(
+    db_session: AsyncSession, provider, store  # noqa: ANN001
+) -> None:
+    from app.retrieval.sparse import BM25Index
+    from tests.factories import build_pdf
+
+    bm25 = BM25Index()
+    paper = await _store_paper(db_session, build_pdf(body="Removable content."), "both.pdf")
+    await _process_paper(db_session, paper.id)
+    await index_paper(db_session, paper.id, provider=provider, store=store, bm25=bm25)
+
+    await remove_paper_from_index(paper.id, store=store, bm25=bm25)
+
+    assert await store.count() == 0
+    assert bm25.size == 0
