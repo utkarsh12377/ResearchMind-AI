@@ -16,7 +16,7 @@ from app.core.config import get_settings
 from app.core.logging import get_logger
 from app.graph.schema import ALLOWED_EDGES, NodeLabel
 from app.graph.store import GraphStore, get_graph_store
-from app.llm.gateway import LLMGateway, Message, Role
+from app.llm.gateway import LLMGateway, Message, Role, get_gateway
 from app.llm.prompts import NL_TO_CYPHER
 
 logger = get_logger(__name__)
@@ -160,9 +160,10 @@ async def generate_cypher(question: str, *, gateway: LLMGateway) -> str:
 async def answer_graph_question(
     question: str,
     *,
-    gateway: LLMGateway,
+    gateway: LLMGateway | None = None,
     store: GraphStore | None = None,
 ) -> GraphQueryResult:
+    gateway = gateway or get_gateway()
     store = store or get_graph_store()
 
     try:
