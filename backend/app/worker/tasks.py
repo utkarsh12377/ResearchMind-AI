@@ -16,7 +16,7 @@ from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.core.storage import get_storage
 from app.ingestion.pdf_parser import ParsedDocument, PdfParseError, parse_pdf
-from app.models import AssetKind, Paper, PaperAsset, PaperStatus
+from app.models import AssetKind, Paper, PaperAsset, PaperReference, PaperStatus
 from app.worker.celery_app import celery_app
 
 configure_logging()
@@ -113,6 +113,7 @@ async def _process_paper(db: AsyncSession, paper_id: uuid.UUID) -> dict[str, obj
         "ocr_page_count": parsed.ocr_page_count,
         "tables": len(parsed.tables),
         "figures": len(parsed.figures),
+        "references": len(parsed.references),
     }
 
 
@@ -125,6 +126,25 @@ async def _replace_assets(db: AsyncSession, paper: Paper, parsed: ParsedDocument
     existing = await db.scalars(select(PaperAsset).where(PaperAsset.paper_id == paper.id))
     for asset in existing:
         await db.delete(asset)
+
+    stale_refs = await db.scalars(
+        select(PaperReference).where(PaperReference.paper_id == paper.id)
+    )
+    for reference in stale_refs:
+        await db.delete(reference)
+
+    for reference in parsed.references:
+        db.add(
+            PaperReference(
+                paper_id=paper.id,
+                order=reference.order,
+                raw_text=reference.raw_text,
+                title=reference.title,
+                doi=reference.doi,
+                arxiv_id=reference.arxiv_id,
+                year=reference.year,
+            )
+        )
 
     for table in parsed.tables:
         db.add(

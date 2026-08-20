@@ -10,6 +10,7 @@ from app.models.mixins import IdMixin, TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.paper_asset import PaperAsset
+    from app.models.paper_reference import PaperReference
     from app.models.user import User
     from app.models.workspace import Workspace
 
@@ -56,6 +57,9 @@ class Paper(IdMixin, TimestampMixin, Base):
     workspace: Mapped["Workspace"] = relationship(back_populates="papers")
     uploaded_by: Mapped["User"] = relationship(back_populates="papers")
     assets: Mapped[list["PaperAsset"]] = relationship(
+        back_populates="paper", cascade="all, delete-orphan"
+    )
+    references: Mapped[list["PaperReference"]] = relationship(
         back_populates="paper", cascade="all, delete-orphan"
     )
 

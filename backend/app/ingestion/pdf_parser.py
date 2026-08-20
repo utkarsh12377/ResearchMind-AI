@@ -16,6 +16,7 @@ import pymupdf
 
 from app.ingestion.assets import ExtractedFigure, ExtractedTable, extract_figures, extract_tables
 from app.ingestion.ocr import OcrEngine, ocr_document
+from app.ingestion.references import ParsedReference, parse_references
 
 # Embedded PDF titles are frequently placeholders left by the authoring tool.
 _JUNK_TITLE_PATTERN = re.compile(
@@ -57,6 +58,7 @@ class ParsedDocument:
     ocr_page_count: int = 0
     tables: list[ExtractedTable] = field(default_factory=list)
     figures: list[ExtractedFigure] = field(default_factory=list)
+    references: list[ParsedReference] = field(default_factory=list)
 
     @property
     def full_text(self) -> str:
@@ -208,7 +210,7 @@ def parse_pdf(
         total_chars = sum(page.char_count for page in pages)
         is_probably_scanned = bool(pages) and total_chars < 100 * len(pages)
 
-        return ParsedDocument(
+        document_result = ParsedDocument(
             page_count=document.page_count,
             pages=pages,
             title=title,
@@ -219,5 +221,7 @@ def parse_pdf(
             tables=tables,
             figures=figures,
         )
+        document_result.references = parse_references(document_result.full_text)
+        return document_result
     finally:
         document.close()
