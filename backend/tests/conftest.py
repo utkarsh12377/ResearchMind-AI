@@ -63,6 +63,8 @@ def _isolated_storage(tmp_path, monkeypatch) -> None:  # noqa: ANN001
     override to keep the patched path from leaking into other tests.
     """
     monkeypatch.setenv("STORAGE_LOCAL_PATH", str(tmp_path / "storage"))
+    # Debug logging floods failure output with every SQL statement.
+    monkeypatch.setenv("APP_DEBUG", "false")
     get_settings.cache_clear()
     yield
     monkeypatch.delenv("STORAGE_LOCAL_PATH", raising=False)

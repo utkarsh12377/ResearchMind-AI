@@ -15,9 +15,20 @@ from tests.factories import build_pdf, build_scanned_pdf
 
 
 async def _store_paper(db: AsyncSession, pdf, filename: str = "paper.pdf") -> Paper:  # noqa: ANN001
-    user = User(email="ingest@example.com", hashed_password="x")
-    workspace = Workspace(name="Personal", owner=user)
-    db.add_all([user, workspace])
+    from sqlalchemy import select
+
+    # Reuse the existing owner so a test can ingest several papers into one
+    # workspace without tripping the unique email constraint.
+    user = await db.scalar(select(User).where(User.email == "ingest@example.com"))
+    if user is None:
+        user = User(email="ingest@example.com", hashed_password="x")
+        db.add(user)
+        await db.flush()
+
+    workspace = await db.scalar(select(Workspace).where(Workspace.owner_id == user.id))
+    if workspace is None:
+        workspace = Workspace(name="Personal", owner=user)
+        db.add(workspace)
     await db.flush()
 
     checksum, size = compute_checksum(pdf)

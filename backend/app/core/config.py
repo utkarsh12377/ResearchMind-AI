@@ -67,6 +67,13 @@ class Settings(BaseSettings):
     embedding_model: str = "text-embedding-3-small"
     embedding_dimensions: int = 384
     embedding_batch_size: int = 64
+
+    # --- Reranking (used from Milestone 14 onward) ---
+    # "lexical" is dependency-free and deterministic; "cross-encoder" is the
+    # quality option and needs sentence-transformers.
+    reranker_backend: str = "lexical"
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    retrieval_default_limit: int = 10
     jina_api_key: str = ""
 
 
