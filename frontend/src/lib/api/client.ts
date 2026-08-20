@@ -3,7 +3,11 @@ import type {
   ApiKey,
   ApiKeyCreated,
   LoginPayload,
+  PaperList,
   RegisterPayload,
+  ResearchEvent,
+  ResearchResult,
+  SearchFilters,
   Token,
   User,
 } from "@/lib/api/types";
@@ -144,7 +148,104 @@ export const api = {
 
   revokeApiKey: (id: string) =>
     request<void>(`/api/v1/auth/api-keys/${id}`, { method: "DELETE" }),
+
+  listPapers: (limit = 50, offset = 0) =>
+    request<PaperList>(`/api/v1/papers?limit=${limit}&offset=${offset}`),
+
+  uploadPaper: async (file: File) => {
+    // FormData sets its own multipart boundary, so this bypasses request()
+    // rather than letting it force a Content-Type.
+    const body = new FormData();
+    body.append("file", file);
+
+    const headers = new Headers();
+    const token = tokenStorage.get();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+
+    const response = await fetch(`${API_BASE_URL}/api/v1/papers`, {
+      method: "POST",
+      headers,
+      body,
+    });
+
+    const text = await response.text();
+    const payload = text ? JSON.parse(text) : null;
+    if (!response.ok) {
+      const error = payload as ApiErrorBody | null;
+      throw new ApiError(
+        error?.error?.message ?? `Upload failed with status ${response.status}`,
+        response.status,
+        error?.error?.type,
+      );
+    }
+    return payload;
+  },
+
+  deletePaper: (id: string) => request<void>(`/api/v1/papers/${id}`, { method: "DELETE" }),
+
+  research: (question: string, filters?: SearchFilters) =>
+    request<ResearchResult>("/api/v1/research", {
+      method: "POST",
+      body: { question, filters: filters ?? {} },
+    }),
 };
+
+/**
+ * Stream a research run as server-sent events.
+ *
+ * Uses fetch rather than EventSource because EventSource cannot send an
+ * Authorization header or issue a POST, both of which this endpoint needs.
+ */
+export async function* streamResearch(
+  question: string,
+  options: { filters?: SearchFilters; signal?: AbortSignal } = {},
+): AsyncGenerator<ResearchEvent> {
+  const headers = new Headers({ "Content-Type": "application/json" });
+  const token = tokenStorage.get();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/research/stream`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ question, filters: options.filters ?? {} }),
+    signal: options.signal,
+  });
+
+  if (!response.ok || !response.body) {
+    throw new ApiError(`Research stream failed with status ${response.status}`, response.status);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    // SSE frames are separated by a blank line; a partial frame stays in the
+    // buffer until the rest arrives.
+    const frames = buffer.split("\n\n");
+    buffer = frames.pop() ?? "";
+
+    for (const frame of frames) {
+      const line = frame
+        .split("\n")
+        .find((l) => l.startsWith("data:"));
+      if (!line) continue;
+
+      const payload = line.slice(5).trim();
+      if (!payload || payload === "[DONE]") continue;
+
+      try {
+        yield JSON.parse(payload) as ResearchEvent;
+      } catch {
+        // A malformed frame shouldn't kill the stream.
+      }
+    }
+  }
+}
 
 export async function fetchHealth(signal?: AbortSignal): Promise<HealthResponse> {
   return request<HealthResponse>("/health", { auth: false, signal });

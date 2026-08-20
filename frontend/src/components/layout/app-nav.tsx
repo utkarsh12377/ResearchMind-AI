@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, LayoutDashboard, LogOut } from "lucide-react";
+import { FlaskConical, KeyRound, LayoutDashboard, LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -14,6 +14,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 // nav never links to a page that doesn't exist yet.
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/research", label: "Research", icon: FlaskConical },
   { href: "/settings/api-keys", label: "API keys", icon: KeyRound },
 ];
 
