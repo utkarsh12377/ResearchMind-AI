@@ -50,9 +50,14 @@ class Settings(BaseSettings):
     qdrant_api_key: str = ""
 
     # --- Knowledge graph (used from Milestone 26 onward) ---
+    # "memory" persists to a JSON file and needs no container; "neo4j" is the
+    # production backend and the only one that can run generated Cypher.
+    graph_store_backend: str = "memory"
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: str = ""
+    graph_extraction_enabled: bool = True
+    graph_max_query_limit: int = 100
 
     # --- LLM providers (used from Milestone 17 onward) ---
     openai_api_key: str = ""
