@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.core.storage import get_storage
+from app.graph.builder import build_paper_graph
 from app.ingestion.chunking import chunk_asset, chunk_document
 from app.ingestion.pdf_parser import ParsedDocument, PdfParseError, parse_pdf
 from app.models import (
@@ -25,6 +26,7 @@ from app.models import (
     PaperReference,
     PaperStatus,
 )
+from app.research.extraction import extract_experiments
 from app.retrieval.embeddings import EmbeddingError
 from app.retrieval.indexer import index_paper
 from app.worker.celery_app import celery_app
@@ -76,10 +78,12 @@ def process_paper(self, paper_id: str) -> dict[str, object]:  # noqa: ANN001
     """
     result = _run_with_session(lambda session: _process_paper(session, uuid.UUID(paper_id)))
 
-    # Embedding is a separate task so a transient provider outage retries on
-    # its own without re-parsing the PDF.
+    # Each downstream stage is its own task so a transient provider outage
+    # retries on its own without re-parsing the PDF.
     if result.get("status") == PaperStatus.READY.value:
         embed_paper.delay(paper_id)
+        build_graph.delay(paper_id)
+        extract_results.delay(paper_id)
 
     return result
 
@@ -269,3 +273,39 @@ def embed_paper(self, paper_id: str, reindex: bool = False) -> dict[str, object]
         raise self.retry(exc=exc) from exc
 
     return {"paper_id": paper_id, "chunks_indexed": count}
+
+@celery_app.task(name="ingestion.build_graph", bind=True, max_retries=2, default_retry_delay=60)
+def build_graph(self, paper_id: str, use_llm: bool = True) -> dict[str, object]:  # noqa: ANN001
+    """Extract entities and project the paper into the knowledge graph."""
+    settings = get_settings()
+    if not settings.graph_extraction_enabled:
+        return {"paper_id": paper_id, "skipped": True}
+
+    async def run(session: AsyncSession) -> dict[str, object]:
+        result = await build_paper_graph(session, uuid.UUID(paper_id), use_llm=use_llm)
+        return {
+            "paper_id": paper_id,
+            "entities": len(result.entities),
+            "relations": len(result.relations),
+        }
+
+    try:
+        return _run_with_session(run)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("graph_build_failed", paper_id=paper_id, error=str(exc))
+        raise self.retry(exc=exc) from exc
+
+
+@celery_app.task(name="ingestion.extract_results", bind=True, max_retries=2, default_retry_delay=60)
+def extract_results(self, paper_id: str, use_llm: bool = True) -> dict[str, object]:  # noqa: ANN001
+    """Pull reported experimental results into queryable rows."""
+
+    async def run(session: AsyncSession) -> dict[str, object]:
+        results = await extract_experiments(session, uuid.UUID(paper_id), use_llm=use_llm)
+        return {"paper_id": paper_id, "results": len(results)}
+
+    try:
+        return _run_with_session(run)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("result_extraction_failed", paper_id=paper_id, error=str(exc))
+        raise self.retry(exc=exc) from exc
