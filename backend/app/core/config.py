@@ -58,7 +58,12 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     anthropic_api_key: str = ""
     gemini_api_key: str = ""
-    default_llm_provider: str = "openai"
+    # "echo" is an offline provider used when no API key is configured.
+    default_llm_provider: str = "echo"
+    fallback_llm_provider: str = ""
+    llm_model: str = ""
+    llm_temperature: float = 0.2
+    llm_max_tokens: int = 2048
 
     # --- Embeddings (used from Milestone 11 onward) ---
     # "hash" is a deterministic local provider with no network dependency; it
