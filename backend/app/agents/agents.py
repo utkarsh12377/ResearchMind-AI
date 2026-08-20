@@ -17,6 +17,7 @@ from collections.abc import Awaitable, Callable
 
 from app.agents.prompts import CRITIQUE, PLAN, REASON, REPORT, REVISE, SUMMARIZE
 from app.agents.state import AgentName, Intent, Plan, ResearchState, Step
+from app.agents.tools import SearchTool, get_search_tool, wrap_untrusted
 from app.core.logging import get_logger
 from app.llm.context import pack_context
 from app.llm.gateway import LLMGateway, Message, Role
@@ -37,11 +38,25 @@ class AgentContext:
     in-memory index in tests.
     """
 
-    def __init__(self, db, user, gateway: LLMGateway, **retrieval_kwargs) -> None:  # noqa: ANN001
+    def __init__(
+        self,
+        db,  # noqa: ANN001
+        user,  # noqa: ANN001
+        gateway: LLMGateway,
+        search_tool: SearchTool | None = None,
+        **retrieval_kwargs,
+    ) -> None:
         self.db = db
         self.user = user
         self.gateway = gateway
+        self._search_tool = search_tool
         self.retrieval_kwargs = retrieval_kwargs
+
+    @property
+    def search_tool(self) -> SearchTool:
+        if self._search_tool is None:
+            self._search_tool = get_search_tool()
+        return self._search_tool
 
 
 def _step(agent: AgentName, summary: str, started: float, detail: str = "") -> Step:
@@ -164,6 +179,40 @@ async def retriever_agent(state: ResearchState, context: AgentContext) -> dict:
     }
 
 
+# --- Web search ------------------------------------------------------------
+
+
+@resilient(AgentName.WEB_SEARCH)
+async def web_search_agent(state: ResearchState, context: AgentContext) -> dict:
+    """Fetch external context when the planner asked for it.
+
+    Results that trip the injection detector are dropped rather than passed
+    along: a page trying to hijack the agent has already disqualified itself as
+    evidence, and passing it through would rely on the model to resist it.
+    """
+    started = time.time()
+    plan: Plan | None = state.get("plan")
+
+    if not plan or not plan.needs_web_search:
+        return {"steps": [_step(AgentName.WEB_SEARCH, "Web search not required", started)]}
+
+    results = await context.search_tool.search(state["question"])
+    safe = [result for result in results if not result.flagged]
+    dropped = len(results) - len(safe)
+
+    return {
+        "web_results": safe,
+        "steps": [
+            _step(
+                AgentName.WEB_SEARCH,
+                f"Fetched {len(safe)} external result(s)",
+                started,
+                f"{dropped} dropped as suspected prompt injection" if dropped else "",
+            )
+        ],
+    }
+
+
 # --- Ranker ----------------------------------------------------------------
 
 
@@ -220,6 +269,14 @@ async def reasoner_agent(state: ResearchState, context: AgentContext) -> dict:
     # A literature review needs a structured report, not a paragraph answer.
     prompt = REPORT if plan and plan.intent == Intent.LITERATURE_REVIEW else REASON
 
+    sources = format_sources(chunks)
+    # External text is appended already wrapped and labeled untrusted, so the
+    # model is told explicitly that it is data rather than instruction.
+    external = wrap_untrusted(state.get("web_results") or [])
+    if external:
+        separator = chr(10) * 2
+        sources = sources + separator + external
+
     completion = await context.gateway.complete(
         [
             Message(Role.SYSTEM, prompt.system),
@@ -228,7 +285,7 @@ async def reasoner_agent(state: ResearchState, context: AgentContext) -> dict:
                 prompt.render(
                     question=state["question"],
                     sub_questions=sub_questions,
-                    sources=format_sources(chunks),
+                    sources=sources,
                 ),
             ),
         ],
@@ -489,6 +546,7 @@ __all__ = [
     "planner_agent",
     "ranker_agent",
     "reasoner_agent",
+    "web_search_agent",
     "reflector_agent",
     "serialize_state",
     "summarizer_agent",

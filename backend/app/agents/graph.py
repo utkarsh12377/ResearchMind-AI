@@ -2,7 +2,7 @@
 
 Topology:
 
-    planner -> retriever -> ranker -> reasoner -> critic
+    planner -> retriever -> web_search -> ranker -> reasoner -> critic
                                                     |
                                     needs_revision? |
                                        yes -> reflector -> critic  (bounded)
@@ -37,6 +37,7 @@ from app.agents.agents import (
     serialize_state,
     summarizer_agent,
     verifier_agent,
+    web_search_agent,
 )
 from app.agents.state import ResearchState, initial_state
 from app.core.logging import get_logger
@@ -61,6 +62,7 @@ def build_graph(context: AgentContext):  # noqa: ANN201 - LangGraph's compiled t
 
     graph.add_node("planner", partial(planner_agent, context=context))
     graph.add_node("retriever", partial(retriever_agent, context=context))
+    graph.add_node("web_search", partial(web_search_agent, context=context))
     graph.add_node("ranker", partial(ranker_agent, context=context))
     graph.add_node("reasoner", partial(reasoner_agent, context=context))
     graph.add_node("critic", partial(critic_agent, context=context))
@@ -71,7 +73,10 @@ def build_graph(context: AgentContext):  # noqa: ANN201 - LangGraph's compiled t
 
     graph.set_entry_point("planner")
     graph.add_edge("planner", "retriever")
-    graph.add_edge("retriever", "ranker")
+    # Web search sits between retrieval and ranking so external results are
+    # packed under the same context budget as corpus passages.
+    graph.add_edge("retriever", "web_search")
+    graph.add_edge("web_search", "ranker")
     graph.add_edge("ranker", "reasoner")
     graph.add_edge("reasoner", "critic")
 

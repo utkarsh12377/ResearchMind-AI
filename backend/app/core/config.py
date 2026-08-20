@@ -79,6 +79,13 @@ class Settings(BaseSettings):
     reranker_backend: str = "lexical"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     retrieval_default_limit: int = 10
+
+    # --- Web search (used from Milestone 24 onward) ---
+    # Disabled unless a provider and key are set; external content is
+    # untrusted and optional enrichment, never required for a run.
+    web_search_provider: str = ""
+    tavily_api_key: str = ""
+    web_search_enabled: bool = False
     jina_api_key: str = ""
 
 

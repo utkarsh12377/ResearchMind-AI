@@ -36,11 +36,11 @@ the system design these milestones build toward.
 - [x] 20. Reflection & verification agent (answer-vs-source check, hallucination flagging, confidence score).
 
 ## Phase 4 — Multi-Agent System (LangGraph)
-- [ ] 21. LangGraph skeleton: state schema, Planner + Retriever agent nodes, streamed intermediate steps.
-- [ ] 22. Agents batch 1: Ranking, Verification, Reasoning, Citation.
-- [ ] 23. Agents batch 2: Critic, Reflection, Summarizer, Report Generator - end-to-end lit-review draft.
-- [ ] 24. Web Search Agent + external tool-use framework (sandboxed).
-- [ ] 25. Agent orchestrator API + frontend agent-status/timeline streaming view.
+- [x] 21. LangGraph skeleton: state schema, Planner + Retriever agent nodes, streamed intermediate steps.
+- [x] 22. Agents batch 1: Ranking, Verification, Reasoning, Citation.
+- [x] 23. Agents batch 2: Critic, Reflection, Summarizer, Report Generator - end-to-end lit-review draft.
+- [x] 24. Web Search Agent + external tool-use framework (sandboxed).
+- [x] 25. Agent orchestrator API + frontend agent-status/timeline streaming view.
 
 ## Phase 5 — Knowledge Graph
 - [ ] 26. Neo4j schema + LLM-assisted entity/relation extraction pipeline.
