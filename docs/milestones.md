@@ -18,8 +18,8 @@ the system design these milestones build toward.
 - [x] 6. PDF parsing (PyMuPDF): text/layout extraction, metadata (title/authors/abstract).
 - [x] 7. OCR pipeline for scanned papers (text-layer density check + Tesseract/PaddleOCR).
 - [x] 8. Table & figure extraction (Docling/Camelot) with captions.
-- [ ] 9. Equation & reference/citation extraction, DOI/arXiv resolution.
-- [ ] 10. Layout-aware hierarchical chunking (paper -> section -> paragraph/table/figure nodes).
+- [x] 9. Equation & reference/citation extraction, DOI/arXiv resolution.
+- [x] 10. Layout-aware hierarchical chunking (paper -> section -> paragraph/table/figure nodes).
 
 ## Phase 2 — Embedding & Retrieval Core
 - [ ] 11. Pluggable embedding provider interface (OpenAI/BGE/Jina) + batch embedding Celery tasks + cache.

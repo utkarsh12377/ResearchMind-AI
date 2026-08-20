@@ -9,6 +9,7 @@ from app.db.base import Base
 from app.models.mixins import IdMixin, TimestampMixin
 
 if TYPE_CHECKING:
+    from app.models.document_chunk import DocumentChunk
     from app.models.paper_asset import PaperAsset
     from app.models.paper_reference import PaperReference
     from app.models.user import User
@@ -60,6 +61,9 @@ class Paper(IdMixin, TimestampMixin, Base):
         back_populates="paper", cascade="all, delete-orphan"
     )
     references: Mapped[list["PaperReference"]] = relationship(
+        back_populates="paper", cascade="all, delete-orphan"
+    )
+    chunks: Mapped[list["DocumentChunk"]] = relationship(
         back_populates="paper", cascade="all, delete-orphan"
     )
 

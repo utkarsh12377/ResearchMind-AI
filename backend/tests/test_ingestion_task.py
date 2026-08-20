@@ -183,3 +183,76 @@ async def test_run_with_session_works_inside_a_running_event_loop() -> None:
 
     # This test function is itself running inside an event loop.
     assert _run_with_session(operation) == "ran"
+
+
+@pytest.mark.asyncio
+async def test_processing_creates_retrievable_chunks(db_session: AsyncSession) -> None:
+    from sqlalchemy import select
+
+    from app.models import DocumentChunk
+    from tests.factories import build_pdf
+
+    paper = await _store_paper(db_session, build_pdf(pages=2), "chunked.pdf")
+
+    result = await _process_paper(db_session, paper.id)
+
+    assert result["chunks"] > 0
+    chunks = list(
+        await db_session.scalars(
+            select(DocumentChunk)
+            .where(DocumentChunk.paper_id == paper.id)
+            .order_by(DocumentChunk.chunk_index)
+        )
+    )
+    assert [c.chunk_index for c in chunks] == list(range(len(chunks)))
+    assert all(c.token_estimate > 0 for c in chunks)
+    assert not any(c.is_embedded for c in chunks)
+
+
+@pytest.mark.asyncio
+async def test_reprocessing_rebuilds_chunks_without_unique_violation(
+    db_session: AsyncSession,
+) -> None:
+    """Regression: deletes queued alongside inserts flushed in the wrong order.
+
+    Chunk indices restart at 0 on every run, so the new rows collided with the
+    old ones on the (paper_id, chunk_index) unique index.
+    """
+    from sqlalchemy import func, select
+
+    from app.models import DocumentChunk
+    from tests.factories import build_pdf_with_table
+
+    paper = await _store_paper(db_session, build_pdf_with_table(), "rechunk.pdf")
+
+    first = await _process_paper(db_session, paper.id)
+    second = await _process_paper(db_session, paper.id)
+
+    assert first["chunks"] == second["chunks"]
+    total = await db_session.scalar(
+        select(func.count()).select_from(DocumentChunk).where(DocumentChunk.paper_id == paper.id)
+    )
+    assert total == second["chunks"]
+
+
+@pytest.mark.asyncio
+async def test_table_content_is_chunked_for_retrieval(db_session: AsyncSession) -> None:
+    from sqlalchemy import select
+
+    from app.models import DocumentChunk
+    from tests.factories import build_pdf_with_table
+
+    paper = await _store_paper(db_session, build_pdf_with_table(), "tablechunk.pdf")
+
+    await _process_paper(db_session, paper.id)
+
+    table_chunks = list(
+        await db_session.scalars(
+            select(DocumentChunk).where(
+                DocumentChunk.paper_id == paper.id, DocumentChunk.kind == "table"
+            )
+        )
+    )
+    assert len(table_chunks) == 1
+    assert "| Model | Accuracy | F1 |" in table_chunks[0].content
+    assert table_chunks[0].page_number == 1

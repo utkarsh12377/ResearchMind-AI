@@ -9,14 +9,22 @@ from collections.abc import Awaitable, Callable
 from concurrent.futures import ThreadPoolExecutor
 from typing import TypeVar
 
-from sqlalchemy import select
+from sqlalchemy import delete as sa_delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
 from app.core.logging import configure_logging, get_logger
 from app.core.storage import get_storage
+from app.ingestion.chunking import chunk_asset, chunk_document
 from app.ingestion.pdf_parser import ParsedDocument, PdfParseError, parse_pdf
-from app.models import AssetKind, Paper, PaperAsset, PaperReference, PaperStatus
+from app.models import (
+    AssetKind,
+    DocumentChunk,
+    Paper,
+    PaperAsset,
+    PaperReference,
+    PaperStatus,
+)
 from app.worker.celery_app import celery_app
 
 configure_logging()
@@ -97,6 +105,7 @@ async def _process_paper(db: AsyncSession, paper_id: uuid.UUID) -> dict[str, obj
     paper.status = PaperStatus.READY
 
     await _replace_assets(db, paper, parsed)
+    chunk_count = await _replace_chunks(db, paper, parsed)
     await db.commit()
 
     logger.info(
@@ -114,6 +123,7 @@ async def _process_paper(db: AsyncSession, paper_id: uuid.UUID) -> dict[str, obj
         "tables": len(parsed.tables),
         "figures": len(parsed.figures),
         "references": len(parsed.references),
+        "chunks": chunk_count,
     }
 
 
@@ -123,15 +133,12 @@ async def _replace_assets(db: AsyncSession, paper: Paper, parsed: ParsedDocument
     Reprocessing a paper must not accumulate duplicates, so existing assets are
     cleared first.
     """
-    existing = await db.scalars(select(PaperAsset).where(PaperAsset.paper_id == paper.id))
-    for asset in existing:
-        await db.delete(asset)
-
-    stale_refs = await db.scalars(
-        select(PaperReference).where(PaperReference.paper_id == paper.id)
-    )
-    for reference in stale_refs:
-        await db.delete(reference)
+    # Bulk-delete and flush before re-inserting: queuing ORM deletes alongside
+    # the new rows lets the inserts flush first, which trips the unique index
+    # on (paper_id, chunk_index).
+    await db.execute(sa_delete(PaperAsset).where(PaperAsset.paper_id == paper.id))
+    await db.execute(sa_delete(PaperReference).where(PaperReference.paper_id == paper.id))
+    await db.flush()
 
     for reference in parsed.references:
         db.add(
@@ -173,3 +180,62 @@ async def _replace_assets(db: AsyncSession, paper: Paper, parsed: ParsedDocument
                 storage_key=storage_key,
             )
         )
+
+
+async def _replace_chunks(db: AsyncSession, paper: Paper, parsed: ParsedDocument) -> int:
+    """Rebuild this paper's retrievable chunks from the parsed document.
+
+    Chunks are regenerated wholesale rather than diffed: chunk boundaries shift
+    when parsing improves, so a partial update would leave overlapping or
+    orphaned passages in the index.
+    """
+    await db.execute(sa_delete(DocumentChunk).where(DocumentChunk.paper_id == paper.id))
+    await db.flush()
+
+    chunks = chunk_document(parsed.full_text)
+
+    # Tables and figures become their own chunks so a query about a metric can
+    # retrieve the results table directly rather than the prose around it.
+    next_index = len(chunks)
+    for table in parsed.tables:
+        chunks.append(
+            chunk_asset(
+                kind="table",
+                content=table.markdown,
+                caption=table.caption,
+                page_number=table.page_number,
+                index=next_index,
+            )
+        )
+        next_index += 1
+
+    for figure in parsed.figures:
+        if not figure.caption:
+            # A figure with no caption carries no text worth embedding; the
+            # image itself is still stored as a PaperAsset.
+            continue
+        chunks.append(
+            chunk_asset(
+                kind="figure",
+                content="",
+                caption=figure.caption,
+                page_number=figure.page_number,
+                index=next_index,
+            )
+        )
+        next_index += 1
+
+    for chunk in chunks:
+        db.add(
+            DocumentChunk(
+                paper_id=paper.id,
+                chunk_index=chunk.index,
+                content=chunk.content,
+                section_path=chunk.section_path,
+                page_number=chunk.page_number,
+                kind=chunk.kind,
+                token_estimate=chunk.token_estimate,
+            )
+        )
+
+    return len(chunks)
