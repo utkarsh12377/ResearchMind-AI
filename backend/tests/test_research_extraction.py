@@ -11,6 +11,7 @@ from app.research.extraction import (
     extract_experiments,
     extract_methodology,
     extract_results_with_rules,
+    nearby_dataset,
     parse_methodology_payload,
     parse_results_payload,
 )
@@ -209,3 +210,35 @@ async def test_methodology_extraction_reads_the_model_output(db_session: AsyncSe
 
     assert methodology.approach == "Dual encoder retrieval"
     assert methodology.limitations == ["English only"]
+
+
+def test_a_dataset_named_beside_the_metric_is_attributed() -> None:
+    results = extract_results_with_rules("Our model reaches an F1 of 88.4 on SQuAD.")
+
+    assert results[0].dataset == "squad"
+
+
+def test_the_nearest_dataset_wins() -> None:
+    text = "Trained on ImageNet. Much later in the paper, an F1 of 71.0 on SQuAD."
+
+    assert nearby_dataset(text, text.index("F1")) == "squad"
+
+
+def test_a_distant_dataset_is_not_attributed() -> None:
+    """Attributing to whichever benchmark appeared first is how this goes wrong."""
+    text = "We use SQuAD." + (" filler" * 120) + " Accuracy of 90.0."
+
+    assert nearby_dataset(text, text.index("Accuracy")) is None
+
+
+def test_no_dataset_nearby_leaves_it_unattributed() -> None:
+    results = extract_results_with_rules("The reported accuracy of 90.0 stands alone.")
+
+    assert results[0].dataset is None
+
+
+def test_attribution_raises_confidence_slightly() -> None:
+    with_dataset = extract_results_with_rules("An F1 of 88.4 on SQuAD.")[0]
+    without = extract_results_with_rules("An F1 of 88.4 in our setting.")[0]
+
+    assert with_dataset.confidence > without.confidence

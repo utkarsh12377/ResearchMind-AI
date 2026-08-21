@@ -17,7 +17,8 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
-from app.graph.schema import normalize_key
+from app.graph.extraction import GAZETTEER
+from app.graph.schema import NodeLabel, normalize_key
 from app.llm.gateway import LLMGateway, Message, Role
 from app.llm.json_output import clamp_confidence, load_json_object
 from app.llm.prompts import EXTRACT_EXPERIMENTS, EXTRACT_METHODOLOGY
@@ -43,6 +44,16 @@ METRIC_ALIASES = {
     "ndcg@10": "ndcg",
     "auroc": "roc-auc",
 }
+
+#: How far either side of a metric mention to look for a dataset name. One
+#: sentence, roughly: "we evaluate on SQuAD and report an F1 of 71.0" should
+#: attribute, and a dataset named three paragraphs earlier should not.
+DATASET_WINDOW_CHARS = 240
+
+_DATASET_PATTERNS = [
+    (term, re.compile(rf"(?<!\w){re.escape(term)}(?!\w)", re.IGNORECASE))
+    for term in GAZETTEER[NodeLabel.DATASET.value] + GAZETTEER[NodeLabel.BENCHMARK.value]
+]
 
 RESULT_SENTENCE = re.compile(
     r"(?P<metric>accuracy|f1(?:[ -]score)?|exact match|em|bleu|rouge(?:-l)?|meteor|"
@@ -93,18 +104,46 @@ def canonical_metric(name: str) -> str:
     return METRIC_ALIASES.get(key, key)
 
 
+def nearby_dataset(text: str, position: int) -> str | None:
+    """A known dataset named close enough to a metric to plausibly be its subject.
+
+    Restricted to a window around the mention rather than the whole document.
+    Attributing a number to whichever dataset happened to appear first in the
+    paper is how a rule-based extractor ends up confidently wrong.
+    """
+    start = max(0, position - DATASET_WINDOW_CHARS)
+    window = text[start : position + DATASET_WINDOW_CHARS]
+
+    closest: tuple[int, str] | None = None
+    for term, pattern in _DATASET_PATTERNS:
+        match = pattern.search(window)
+        if match is None:
+            continue
+        distance = abs((start + match.start()) - position)
+        if closest is None or distance < closest[0]:
+            closest = (distance, term)
+
+    return closest[1] if closest else None
+
+
 def extract_results_with_rules(text: str, *, default_model: str = "") -> list[ExtractedResult]:
     """Regex pass over result sentences.
 
     Deliberately conservative. It only fires on a metric name adjacent to a
     number, and attributes the number to the paper's own model unless the LLM
-    pass says otherwise, because guessing attribution from prose is exactly
-    where a rule-based extractor starts inventing things.
+    pass says otherwise, because guessing the model from prose is exactly where
+    a rule-based extractor starts inventing things.
+
+    The dataset is treated differently: it comes from the known-entity lexicon
+    and only counts when it appears within about a sentence of the metric.
+    Without it every offline extraction is ungroupable, since comparison needs
+    a dataset to decide which numbers belong in the same cell.
     """
     results: list[ExtractedResult] = []
     seen: set[tuple[str, float]] = set()
+    haystack = text[:MAX_EXTRACTION_CHARS]
 
-    for match in RESULT_SENTENCE.finditer(text[:MAX_EXTRACTION_CHARS]):
+    for match in RESULT_SENTENCE.finditer(haystack):
         try:
             value = float(match.group("value"))
         except ValueError:
@@ -115,15 +154,20 @@ def extract_results_with_rules(text: str, *, default_model: str = "") -> list[Ex
             continue
         seen.add((metric, value))
 
+        dataset = nearby_dataset(haystack, match.start())
         start = max(0, match.start() - 100)
         results.append(
             ExtractedResult(
                 model=default_model or "reported system",
                 metric=metric,
                 value=value,
+                dataset=dataset,
                 unit=match.group("unit"),
-                confidence=0.45,
-                evidence=text[start : match.end() + 40].replace("\n", " ").strip(),
+                # Slightly higher when a dataset was found, since a metric
+                # sitting next to a known benchmark name is more likely to be a
+                # real reported result than a number in passing.
+                confidence=0.5 if dataset else 0.45,
+                evidence=haystack[start : match.end() + 40].replace("\n", " ").strip(),
             )
         )
         if len(results) >= MAX_RESULTS_PER_PAPER:
