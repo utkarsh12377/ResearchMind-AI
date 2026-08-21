@@ -99,6 +99,16 @@ class Settings(BaseSettings):
     eval_min_faithfulness: float = 0.6
     eval_min_context_precision: float = 0.3
 
+    # --- Observability (used from Milestone 35 onward) ---
+    metrics_enabled: bool = True
+    metrics_path: str = "/metrics"
+
+    # --- Request hardening (used from Milestone 35 onward) ---
+    security_headers_enabled: bool = True
+    # Refused on Content-Length before the body is buffered, so this sits above
+    # max_upload_bytes rather than replacing it.
+    max_request_body_bytes: int = 128 * 1024 * 1024
+
 
 @lru_cache
 def get_settings() -> Settings:
