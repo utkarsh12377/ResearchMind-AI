@@ -40,7 +40,7 @@ class ValidationError(AppError):
     payloads before they reach the service layer.
     """
 
-    status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
+    status_code = status.HTTP_422_UNPROCESSABLE_CONTENT
     error_type = "validation_error"
 
 

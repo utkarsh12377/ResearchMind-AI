@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "ResearchMind AI backend — FastAPI service for document ingestion, retrieval, agents, and the knowledge graph."
 requires-python = ">=3.10,<3.13"
 dependencies = [
-    "fastapi>=0.115,<0.116",
+    "fastapi>=0.141,<0.142",
+    # Pinned alongside FastAPI rather than left to its open upper bound: every
+    # Starlette advisory below 1.3.1 is reachable through the request path.
+    "starlette>=1.3.1,<2.0",
     "uvicorn[standard]>=0.32,<0.33",
     "pydantic[email]>=2.9,<3.0",
     "pydantic-settings>=2.6,<3.0",
@@ -18,14 +21,14 @@ dependencies = [
     "python-multipart>=0.0.12,<0.1",
     "celery[redis]>=5.4,<6.0",
     "pymupdf>=1.24,<2.0",
-    "langgraph>=0.2,<0.3",
+    "langgraph>=1.0.10,<2.0",
     "prometheus-client>=0.21,<0.22",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.3,<9.0",
-    "pytest-asyncio>=0.24,<0.25",
+    "pytest>=9.0.3,<10.0",
+    "pytest-asyncio>=1.0,<2.0",
     "httpx>=0.27,<0.28",
     "ruff>=0.7,<0.8",
     "aiosqlite>=0.20,<0.21",
