@@ -77,6 +77,10 @@ jobs:
     name: Deploy to ${{ github.event.inputs.environment || 'staging' }}
     runs-on: ubuntu-latest
     needs: build
+    # A push to main publishes images; it does not move a running environment.
+    # Deploys are deliberate, so they come from a tag or a manual dispatch --
+    # which also keeps the job from failing on a cluster that is not wired up.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     environment:
       name: ${{ github.event.inputs.environment || 'staging' }}
       url: https://researchmind.example.com
