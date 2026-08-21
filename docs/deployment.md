@@ -119,9 +119,20 @@ or GCS implementation and the PVC disappears entirely.
 weekly. The schedule matters more than the push trigger: advisories usually land
 after the code depending on the package was last touched.
 
-`cd.yml` builds both images, tags them with the commit SHA as well as `latest`,
-runs migrations, applies the manifests, waits for the rollout, smoke-tests the
-Service from inside the cluster, and rolls back on failure.
+`cd.yml` builds both images and tags them with the commit SHA as well as
+`latest`. `latest` alone makes a rollback impossible to express, because there
+is nothing left to roll back to.
+
+Publishing and deploying are separate triggers. Every push to `main` publishes
+images; the deploy job runs only for a `v*` tag or a manual dispatch. A green
+build on `main` therefore means the images exist, not that an environment
+moved. When it does run, the deploy applies migrations as a Job, applies the
+manifests, waits for the rollout, smoke-tests the Service from inside the
+cluster, and rolls back on failure.
+
+The deploy job needs a `KUBE_CONFIG` repository secret holding a
+base64-encoded kubeconfig. Without it there is nothing to deploy to, which is
+the other reason the job is not wired to every push.
 
 ## Configuration
 

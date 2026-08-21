@@ -130,6 +130,16 @@ and on a weekly schedule. The schedule matters more than the push trigger: most
 vulnerabilities are disclosed after the code that depends on them was last
 touched, so a push-only scan goes quiet exactly when a project stabilizes.
 
+`pip-audit` runs against a frozen snapshot of the installed environment rather
+than the environment in place. It is run with `--strict`, which treats any
+package it cannot resolve as a failure, and this project is installed editable
+and is not published to PyPI -- audited in place, the job fails on our own
+distribution before it ever reaches a real advisory.
+
+`npm audit` fails at `high` and above. Failing on every low-severity transitive
+advisory trains people to pass `--force` or ignore the job, which leaves the
+repository less safe than a narrower gate that is actually read.
+
 ## Known gaps
 
 Stated rather than hidden, because a security document that lists only what was
