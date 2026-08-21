@@ -30,11 +30,18 @@ jobs:
 
       - name: Install
         run: |
+          python -m pip install --upgrade pip setuptools wheel
           pip install -e ".[dev]"
           pip install pip-audit
 
+      # Audits a frozen snapshot of the environment rather than the environment
+      # in place. --strict treats any package it cannot resolve as a failure,
+      # and this project is installed editable and is not on PyPI, so auditing
+      # in place fails on our own distribution before reaching a real advisory.
       - name: Audit
-        run: pip-audit --strict --progress-spinner off
+        run: |
+          pip freeze --exclude-editable > "$RUNNER_TEMP/audit-requirements.txt"
+          pip-audit --strict --no-deps --progress-spinner off -r "$RUNNER_TEMP/audit-requirements.txt"
 
   node-dependencies:
     name: npm audit
