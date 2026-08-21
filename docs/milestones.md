@@ -1,7 +1,7 @@
 # Milestone Roadmap
 
-Living tracker for the incremental build of ResearchMind AI. Each milestone is implemented, tested,
-and pushed to `main` before the next one starts. See [`docs/architecture.md`](./architecture.md) for
+Build plan for ResearchMind AI. Each milestone was implemented, tested, and pushed before the next
+one started. All 40 are complete. See [`docs/architecture.md`](./architecture.md) for
 the system design these milestones build toward.
 
 ## Phase 0 — Foundation
@@ -43,28 +43,28 @@ the system design these milestones build toward.
 - [x] 25. Agent orchestrator API + frontend agent-status/timeline streaming view.
 
 ## Phase 5 — Knowledge Graph
-- [ ] 26. Neo4j schema + LLM-assisted entity/relation extraction pipeline.
-- [ ] 27. GraphRAG: NL->Cypher query engine, Graph Retrieval Agent wired into main pipeline.
-- [ ] 28. Graph analytics: author/citation/dataset/model graphs, contradiction/agreement detection.
-- [ ] 29. Graph query endpoints tailored for frontend visualization.
+- [x] 26. Neo4j schema + LLM-assisted entity/relation extraction pipeline.
+- [x] 27. GraphRAG: NL->Cypher query engine, Graph Retrieval Agent wired into main pipeline.
+- [x] 28. Graph analytics: author/citation/dataset/model graphs, contradiction/agreement detection.
+- [x] 29. Graph query endpoints tailored for frontend visualization.
 
 ## Phase 6 — Advanced Research Features
-- [ ] 30. Structured extraction: dataset/model/metric/hyperparameter/experiment/methodology extractors
+- [x] 30. Structured extraction: dataset/model/metric/hyperparameter/experiment/methodology extractors
       + comparison tables.
-- [ ] 31. Research trend analysis & timeline generation.
-- [ ] 32. Literature review / report generation pipeline (outline -> draft -> citation weaving -> export).
-- [ ] 33. Research gap discovery & future-direction suggestion agent chain.
+- [x] 31. Research trend analysis & timeline generation.
+- [x] 32. Literature review / report generation pipeline (outline -> draft -> citation weaving -> export).
+- [x] 33. Research gap discovery & future-direction suggestion agent chain.
 
 ## Phase 7 — Evaluation & Observability
-- [ ] 34. RAGAS + DeepEval harness, custom benchmark, CI-gated eval.
-- [ ] 35. Prometheus + Grafana + tracing + admin dashboard (usage/cost/latency).
-- [ ] 36. Frontend feature completion: KG visualization, timeline, comparison view, citation explorer,
+- [x] 34. RAGAS + DeepEval harness, custom benchmark, CI-gated eval.
+- [x] 35. Prometheus + Grafana + tracing + admin dashboard (usage/cost/latency).
+- [x] 36. Frontend feature completion: KG visualization, timeline, comparison view, citation explorer,
       dataset/model explorer, trends dashboard, search filters.
-- [ ] 37. Security hardening: input validation audit, prompt-injection mitigations for agent tools,
+- [x] 37. Security hardening: input validation audit, prompt-injection mitigations for agent tools,
       secrets management, dependency scanning.
 
 ## Phase 8 — Deployment
-- [ ] 38. Kubernetes manifests/Helm chart, NGINX ingress.
-- [ ] 39. CI/CD build+push+deploy workflow (staging).
-- [ ] 40. Final docs pass: architecture/sequence/class diagrams, Swagger polish, deployment +
+- [x] 38. Kubernetes manifests/Helm chart, NGINX ingress.
+- [x] 39. CI/CD build+push+deploy workflow (staging).
+- [x] 40. Final docs pass: architecture/sequence/class diagrams, Swagger polish, deployment +
       contribution guides.
