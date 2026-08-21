@@ -93,6 +93,12 @@ class Settings(BaseSettings):
     web_search_enabled: bool = False
     jina_api_key: str = ""
 
+    # --- Evaluation (used from Milestone 34 onward) ---
+    # Gate thresholds for the CI benchmark. Settings rather than constants
+    # because "good enough" depends on the corpus and moves as the system does.
+    eval_min_faithfulness: float = 0.6
+    eval_min_context_precision: float = 0.3
+
 
 @lru_cache
 def get_settings() -> Settings:
