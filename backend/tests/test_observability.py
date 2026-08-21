@@ -41,7 +41,9 @@ def test_latency_buckets_cover_a_full_agent_run() -> None:
 
 def test_recording_helpers_do_not_raise() -> None:
     record_llm_call(provider="openai", model="gpt-4", prompt_tokens=10, completion_tokens=5)
-    record_llm_call(provider="openai", model="gpt-4", prompt_tokens=0, completion_tokens=0, ok=False)
+    record_llm_call(
+        provider="openai", model="gpt-4", prompt_tokens=0, completion_tokens=0, ok=False
+    )
     record_agent_run("planner")
     record_agent_run("planner", ok=False)
 
