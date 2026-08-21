@@ -1,0 +1,130 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        type: choice
+        options: [staging, production]
+        default: staging
+
+concurrency:
+  # One deploy at a time per ref, and never cancel one in flight. A cancelled
+  # deploy leaves the cluster mid-rollout, which is worse than a queued one.
+  group: cd-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/researchmind
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build and push images
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    strategy:
+      matrix:
+        include:
+          - component: backend
+            context: ./backend
+          - component: frontend
+            context: ./frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: meta
+        run: |
+          # Immutable tag from the commit SHA. "latest" alone makes a rollback
+          # impossible to express, because there is nothing to roll back to.
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.component }}:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.component }}:latest
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+          provenance: false
+
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment || 'staging' }}
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: ${{ github.event.inputs.environment || 'staging' }}
+      url: https://researchmind.example.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Pin image tags
+        working-directory: infra/k8s/base
+        run: |
+          kubectl kustomize --help >/dev/null
+          sed -i "s|newTag: latest|newTag: ${{ needs.build.outputs.tag }}|g" kustomization.yaml
+
+      # Migrations complete before any new pod serves traffic. Running them
+      # alongside the rollout would let a replica on the new image hit a schema
+      # that has not been upgraded yet.
+      - name: Run migrations
+        run: |
+          kubectl -n researchmind delete job migrate --ignore-not-found
+          kubectl apply -k infra/k8s/base --prune=false -l app.kubernetes.io/component=migrate
+          kubectl -n researchmind wait --for=condition=complete job/migrate --timeout=600s
+
+      - name: Apply manifests
+        run: kubectl apply -k infra/k8s/base
+
+      - name: Wait for rollout
+        run: |
+          for deployment in backend worker frontend; do
+            kubectl -n researchmind rollout status "deployment/$deployment" --timeout=600s
+          done
+
+      - name: Smoke test
+        run: |
+          # Runs inside the cluster so it exercises the Service, not just the
+          # public hostname, which may be cached or fronted by a CDN.
+          kubectl -n researchmind run smoke-$RANDOM \
+            --image=curlimages/curl:latest --rm -i --restart=Never --quiet -- \
+            curl -fsS --max-time 15 http://backend:8000/health
+
+      - name: Roll back on failure
+        if: failure()
+        run: |
+          for deployment in backend worker frontend; do
+            kubectl -n researchmind rollout undo "deployment/$deployment" || true
+          done
+          echo "::error::Deploy failed; rolled back to the previous revision."
