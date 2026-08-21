@@ -1,0 +1,15 @@
+apiVersion: 1
+
+providers:
+  - name: ResearchMind
+    orgId: 1
+    folder: ResearchMind
+    type: file
+    disableDeletion: false
+    # Dashboards are provisioned from the repo, so an edit made in the UI is
+    # overwritten on restart. That is intentional: the file is the source of
+    # truth, and a panel that only exists in someone's browser is not reviewable.
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false
