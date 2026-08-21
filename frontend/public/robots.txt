@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+
+# The API is proxied under this prefix and returns JSON only; crawling it wastes
+# budget on pages that will never rank.
+Disallow: /api/
