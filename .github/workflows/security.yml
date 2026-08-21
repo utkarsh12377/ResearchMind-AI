@@ -1,0 +1,83 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly. Most advisories land after the code that depends on the package
+    # was last touched, so a push-only scan goes quiet exactly when a project
+    # stabilises.
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  python-dependencies:
+    name: pip-audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          pip install -e ".[dev]"
+          pip install pip-audit
+
+      - name: Audit
+        run: pip-audit --strict --progress-spinner off
+
+  node-dependencies:
+    name: npm audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # High and above only. Failing on every low-severity transitive advisory
+      # trains people to ignore the job, which is worse than not having it.
+      - name: Audit
+        run: npm audit --audit-level=high
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for committed secrets
+        run: |
+          if git ls-files | grep -E '(^|/)\.env$'; then
+            echo "::error::A .env file is committed. Secrets belong in the environment."
+            exit 1
+          fi
+          # Provider key prefixes, matched against tracked files only so the
+          # scan does not trip over the venv or node_modules.
+          if git grep -nE '(sk-[A-Za-z0-9]{20,}|sk-ant-[A-Za-z0-9-]{20,}|AIza[A-Za-z0-9_-]{30,})' -- \
+              ':!*.example' ':!docs/*' ':!.github/workflows/security.yml'; then
+            echo "::error::A value matching a provider API key format is committed."
+            exit 1
+          fi
+          echo "No committed secrets found."
