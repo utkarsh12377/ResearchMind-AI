@@ -97,7 +97,9 @@ def test_markdown_includes_headings_and_references() -> None:
         topic="t",
         title="A Review",
         sources=[_source(1)],
-        sections=[ReviewSection(heading="Overview", focus="f", text="Claim [1].", source_indices=[1])],
+        sections=[
+            ReviewSection(heading="Overview", focus="f", text="Claim [1].", source_indices=[1])
+        ],
     )
 
     markdown = review.to_markdown()
@@ -168,7 +170,12 @@ async def test_an_unusable_outline_falls_back_to_a_standard_structure() -> None:
     title, sections, _ = await plan_outline("dense retrieval", [_source(1)], gateway=gateway)
 
     assert title == "A Review of dense retrieval"
-    assert [s.heading for s in sections] == ["Overview", "Approaches", "Evaluation", "Open problems"]
+    assert [s.heading for s in sections] == [
+        "Overview",
+        "Approaches",
+        "Evaluation",
+        "Open problems",
+    ]
 
 
 @pytest.mark.asyncio
