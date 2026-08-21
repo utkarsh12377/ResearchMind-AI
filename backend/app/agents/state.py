@@ -104,6 +104,7 @@ class ResearchState(TypedDict, total=False):
     # --- Retrieval ---
     chunks: list
     web_results: list
+    graph_paths: list
 
     # --- Reasoning ---
     draft_answer: str
@@ -138,6 +139,7 @@ def initial_state(
         plan=None,
         chunks=[],
         web_results=[],
+        graph_paths=[],
         draft_answer="",
         final_answer="",
         citations=[],

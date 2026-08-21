@@ -40,6 +40,11 @@ async def upload(
     # Parsing is slow and IO-bound, so the request returns as soon as the file
     # is durably stored; clients poll `status` for progress.
     process_paper.delay(str(paper.id))
+
+    # Re-read before serializing. With a real broker the row is still pending
+    # and this is a no-op, but in eager mode the task has already finished and
+    # the in-memory object would report a status that is no longer true.
+    await db.refresh(paper)
     return paper
 
 

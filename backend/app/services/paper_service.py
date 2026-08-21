@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.core.storage import build_storage_key, compute_checksum, get_storage
+from app.core.validation import UnsupportedFileError, assert_pdf, sanitize_filename
 from app.models import AssetKind, Paper, PaperAsset, PaperStatus, User, Workspace
 
 ALLOWED_CONTENT_TYPES = {"application/pdf"}
@@ -38,6 +39,14 @@ async def upload_paper(
     if content_type not in ALLOWED_CONTENT_TYPES:
         raise ValidationError(f"Unsupported content type {content_type!r}; expected a PDF")
 
+    # The declared content type is a claim the client makes about its own
+    # upload. The magic bytes are the file itself.
+    try:
+        assert_pdf(file)
+    except UnsupportedFileError as exc:
+        raise ValidationError(str(exc)) from exc
+
+    filename = sanitize_filename(filename)
     checksum, size_bytes = compute_checksum(file)
 
     if size_bytes == 0:

@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: researchmind
+
+commonLabels:
+  app.kubernetes.io/name: researchmind
+  app.kubernetes.io/part-of: researchmind
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - stateful.yaml
+  - migrate-job.yaml
+  - backend.yaml
+  - worker.yaml
+  - frontend.yaml
+  - ingress.yaml
+
+# secret.example.yaml is intentionally not listed. Copy it to secret.yaml with
+# real values and apply that separately, or point this at External Secrets.
+
+images:
+  - name: ghcr.io/utkarsh12377/researchmind-backend
+    newTag: latest
+  - name: ghcr.io/utkarsh12377/researchmind-frontend
+    newTag: latest

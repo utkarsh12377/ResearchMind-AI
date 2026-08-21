@@ -91,17 +91,110 @@ flowchart TB
 - **Neo4j**: knowledge graph — papers, authors, institutions, datasets, models, tasks, metrics, methods.
 - **Object storage**: raw PDFs and extracted assets (figures, tables).
 
+## Request path: a research question
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant API as FastAPI
+    participant G as Agent graph
+    participant R as Retrieval
+    participant KG as Knowledge graph
+    participant L as LLM gateway
+
+    U->>API: POST /research/stream
+    API->>G: run graph
+    G->>L: plan (classify intent, decompose)
+    L-->>G: sub-questions
+    G->>R: retrieve per sub-question
+    R->>R: dense + BM25 concurrently
+    R->>R: reciprocal rank fusion
+    R->>R: cross-encoder rerank
+    R-->>G: ranked passages
+    G->>KG: expand from entities in the hits
+    KG-->>G: related papers via shared entities
+    G->>R: retrieve within those papers
+    G->>L: reason over packed context
+    L-->>G: draft answer
+    G->>L: critique
+    alt needs revision (bounded)
+        G->>L: revise
+        G->>L: critique again
+    end
+    G->>L: verify answer against sources
+    G->>G: extract citations, score confidence
+    G-->>API: steps streamed as they complete
+    API-->>U: SSE: step events, then result
+```
+
+The critic/reflector cycle is why this is a graph rather than a pipeline:
+revision is conditional and repeatable, which a linear chain cannot express. The
+loop is bounded inside the critic, because a critic and a reviser left to argue
+will burn tokens indefinitely.
+
+## Ingestion path
+
+```mermaid
+flowchart LR
+    UP["Upload"] --> STORE["Content-addressed blob"]
+    STORE --> PARSE["Parse (PyMuPDF)"]
+    PARSE --> OCR{"Thin text layer?"}
+    OCR -->|yes| TESS["OCR that page"]
+    OCR -->|no| ASSETS
+    TESS --> ASSETS["Tables, figures, captions"]
+    ASSETS --> REFS["References, DOI, arXiv"]
+    REFS --> CHUNK["Layout-aware chunking"]
+    CHUNK --> EMB["Embed + index (dense + BM25)"]
+    CHUNK --> KGB["Entity extraction -> graph"]
+    CHUNK --> RES["Experiment results -> rows"]
+```
+
+Each stage after parsing is its own Celery task. A transient provider outage
+during embedding retries on its own rather than re-parsing a forty-page PDF.
+
+## Retrieval, in detail
+
+Dense and sparse retrieval answer different questions and fail in different
+directions. Dense search finds a passage that means the same thing in different
+words; BM25 finds an exact identifier like `WikiSQL` that an embedding blurs into
+its neighbours. Neither is a superset of the other, so both run and their results
+are fused.
+
+Fusion is **reciprocal rank** rather than a weighted score sum, because cosine
+similarity and BM25 scores are on incompatible scales — normalising them requires
+knowing each distribution, and that distribution shifts with the corpus. RRF only
+needs the ordering, which is exactly the part that is comparable.
+
+Reranking is a second stage over an over-fetched candidate set (4x the requested
+limit). Reranking exactly *k* results can only shuffle them; it cannot recover a
+relevant passage that the first stage ranked at *k+1*.
+
+Graph retrieval is a third source. Vector search cannot answer "which other
+papers used this dataset", because that answer is a path rather than a passage.
+
 ## Design principles
 
-1. **Everything behind an interface.** Vector store, embedding provider, and LLM provider are all
-   pluggable via small abstract interfaces so backends can be swapped without touching business logic.
-2. **Async by default.** Ingestion, embedding, and KG extraction are long-running and run as Celery
-   tasks; the API stays responsive and reports job status.
-3. **Explainable over magic.** Multi-agent orchestration is hand-rolled with LangGraph rather than
-   hidden inside a framework's black-box `.run()` call, so every step is inspectable and streamable
-   to the frontend.
-4. **Incremental infra.** The full target stack (Postgres, Redis, Qdrant, Neo4j) is declared in
-   `infra/docker-compose.yml` from day one, but Qdrant/Neo4j are gated behind compose profiles until
-   the milestones that use them, so early development doesn't require running services nothing uses yet.
+1. **Everything behind an interface.** Storage, embeddings, vector store,
+   reranker, OCR, graph store, LLM provider, and web search are all abstract
+   interfaces with at least two implementations — one of which runs offline. That
+   is what makes the entire system testable without a single container or key.
+2. **Async by default.** Ingestion, embedding, and extraction are long-running and
+   run as Celery tasks; the API stays responsive and reports job status.
+3. **Explainable over magic.** Every ranked result carries the ranks that produced
+   it, every agent records a step, and every generated query is returned to the
+   caller. A system that cannot show its work cannot be debugged or trusted.
+4. **Validate at the boundary, not after.** Model output is checked against a
+   closed schema before it becomes state; generated Cypher is checked against a
+   whitelist before it runs; uploads are checked by content rather than by what
+   the client claims.
+5. **Authorize before scoring.** Filtering results after ranking leaks through
+   result counts and score distributions. The candidate set is scoped first.
+6. **Incremental infra.** The full stack is declared in
+   `infra/docker-compose.yml` from day one, but Qdrant, Neo4j, and the
+   observability services are gated behind compose profiles until they are
+   needed, so early development does not require running services nothing uses.
 
-See [`docs/milestones.md`](./milestones.md) for the incremental build plan.
+See [`docs/milestones.md`](./milestones.md) for the build plan,
+[`docs/api.md`](./api.md) for the endpoint reference,
+[`docs/security.md`](./security.md) for the threat model, and
+[`docs/deployment.md`](./deployment.md) for how to run it.

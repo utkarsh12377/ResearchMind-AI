@@ -1,0 +1,85 @@
+groups:
+  - name: researchmind-availability
+    rules:
+      # Alerts on the error *rate*, not on a raw count. A count fires once and
+      # then keeps firing forever after a single bad deploy.
+      - alert: HighServerErrorRate
+        expr: |
+          sum(rate(researchmind_http_requests_total{status="5xx"}[5m]))
+            / sum(rate(researchmind_http_requests_total[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Over 5% of requests are failing"
+          description: "5xx rate has been above 5% for ten minutes."
+
+      - alert: BackendDown
+        expr: up{job="researchmind-backend"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend is not being scraped"
+
+  - name: researchmind-latency
+    rules:
+      # p95 on the retrieval path. The agent graph is deliberately excluded:
+      # it is slow by design and would mask a regression in the fast path.
+      - alert: SlowRetrieval
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(rate(researchmind_retrieval_duration_seconds_bucket[5m])) by (le, stage)
+          ) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Retrieval p95 above 2s for stage {{ $labels.stage }}"
+
+  - name: researchmind-cost
+    rules:
+      - alert: TokenSpendSpike
+        expr: |
+          sum(rate(researchmind_llm_tokens_total[15m]))
+            > 3 * sum(rate(researchmind_llm_tokens_total[6h] offset 1h))
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Token consumption is three times its recent baseline"
+          description: "Usually a retry storm or a runaway agent revision loop."
+
+      - alert: LLMErrorRate
+        expr: |
+          sum(rate(researchmind_llm_requests_total{outcome="error"}[10m]))
+            / sum(rate(researchmind_llm_requests_total[10m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 10% of LLM calls are failing"
+
+  - name: researchmind-pipeline
+    rules:
+      - alert: IngestionFailures
+        expr: |
+          sum(rate(researchmind_ingestion_total{status="failed"}[30m])) > 0.1
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Papers are failing ingestion"
+
+      - alert: SparseIndexEmpty
+        expr: researchmind_indexed_chunks == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The BM25 index is empty"
+          description: >-
+            Term statistics live in process memory and are rebuilt at startup.
+            An empty index while papers exist means the warm-up failed, and
+            hybrid search is running on dense retrieval alone.

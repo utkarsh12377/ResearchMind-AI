@@ -2,13 +2,23 @@ import type {
   ApiErrorBody,
   ApiKey,
   ApiKeyCreated,
+  ComparisonResponse,
+  ConsistencyResponse,
+  GapResponse,
+  GraphOverview,
+  GraphQueryResponse,
   LoginPayload,
+  NetworkResponse,
   PaperList,
+  PaperMatrixRow,
   RegisterPayload,
   ResearchEvent,
   ResearchResult,
+  ReviewResponse,
   SearchFilters,
+  SearchResponse,
   Token,
+  TrendResponse,
   User,
 } from "@/lib/api/types";
 
@@ -187,6 +197,64 @@ export const api = {
     request<ResearchResult>("/api/v1/research", {
       method: "POST",
       body: { question, filters: filters ?? {} },
+    }),
+
+  search: (query: string, options: { limit?: number; filters?: SearchFilters } = {}) =>
+    request<SearchResponse>("/api/v1/search", {
+      method: "POST",
+      body: {
+        query,
+        limit: options.limit ?? 10,
+        filters: options.filters ?? {},
+      },
+    }),
+
+  graphOverview: () => request<GraphOverview>("/api/v1/graph/overview"),
+
+  graphNetwork: (view: string, options: { labels?: string[]; minPapers?: number } = {}) => {
+    const params = new URLSearchParams({ view });
+    if (options.minPapers) params.set("min_papers", String(options.minPapers));
+    for (const label of options.labels ?? []) params.append("labels", label);
+    return request<NetworkResponse>(`/api/v1/graph/network?${params.toString()}`);
+  },
+
+  graphQuery: (question: string) =>
+    request<GraphQueryResponse>("/api/v1/graph/query", { method: "POST", body: { question } }),
+
+  comparison: (paperIds: string[] = []) =>
+    request<ComparisonResponse>("/api/v1/insights/comparison", {
+      method: "POST",
+      body: { paper_ids: paperIds },
+    }),
+
+  paperMatrix: (paperIds: string[] = []) =>
+    request<{ rows: PaperMatrixRow[] }>("/api/v1/insights/matrix", {
+      method: "POST",
+      body: { paper_ids: paperIds },
+    }),
+
+  trends: (topic: string, paperIds: string[] = []) =>
+    request<TrendResponse>("/api/v1/insights/trends", {
+      method: "POST",
+      body: { topic, paper_ids: paperIds },
+    }),
+
+  consistency: (paperIds: string[] = [], includeClaims = true) =>
+    request<ConsistencyResponse>("/api/v1/insights/consistency", {
+      method: "POST",
+      body: { paper_ids: paperIds, include_claims: includeClaims },
+    }),
+
+  gaps: (topic: string, paperIds: string[] = []) =>
+    request<GapResponse>("/api/v1/insights/gaps", {
+      method: "POST",
+      body: { topic, paper_ids: paperIds },
+    }),
+
+  review: (topic: string, paperIds: string[] = [], maxSections = 6) =>
+    request<ReviewResponse>("/api/v1/insights/review", {
+      method: "POST",
+      body: { topic, paper_ids: paperIds, max_sections: maxSections },
     }),
 };
 

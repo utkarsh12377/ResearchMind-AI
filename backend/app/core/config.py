@@ -50,9 +50,14 @@ class Settings(BaseSettings):
     qdrant_api_key: str = ""
 
     # --- Knowledge graph (used from Milestone 26 onward) ---
+    # "memory" persists to a JSON file and needs no container; "neo4j" is the
+    # production backend and the only one that can run generated Cypher.
+    graph_store_backend: str = "memory"
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: str = ""
+    graph_extraction_enabled: bool = True
+    graph_max_query_limit: int = 100
 
     # --- LLM providers (used from Milestone 17 onward) ---
     openai_api_key: str = ""
@@ -87,6 +92,22 @@ class Settings(BaseSettings):
     tavily_api_key: str = ""
     web_search_enabled: bool = False
     jina_api_key: str = ""
+
+    # --- Evaluation (used from Milestone 34 onward) ---
+    # Gate thresholds for the CI benchmark. Settings rather than constants
+    # because "good enough" depends on the corpus and moves as the system does.
+    eval_min_faithfulness: float = 0.6
+    eval_min_context_precision: float = 0.3
+
+    # --- Observability (used from Milestone 35 onward) ---
+    metrics_enabled: bool = True
+    metrics_path: str = "/metrics"
+
+    # --- Request hardening (used from Milestone 35 onward) ---
+    security_headers_enabled: bool = True
+    # Refused on Content-Length before the body is buffered, so this sits above
+    # max_upload_bytes rather than replacing it.
+    max_request_body_bytes: int = 128 * 1024 * 1024
 
 
 @lru_cache

@@ -2,8 +2,11 @@
 
 from fastapi import APIRouter
 
+from app.api.v1.endpoints.admin import router as admin_router
 from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.chat import router as chat_router
+from app.api.v1.endpoints.graph import router as graph_router
+from app.api.v1.endpoints.insights import router as insights_router
 from app.api.v1.endpoints.papers import router as papers_router
 from app.api.v1.endpoints.research import router as research_router
 from app.api.v1.endpoints.search import router as search_router
@@ -14,3 +17,6 @@ api_router.include_router(papers_router)
 api_router.include_router(search_router)
 api_router.include_router(chat_router)
 api_router.include_router(research_router)
+api_router.include_router(graph_router)
+api_router.include_router(insights_router)
+api_router.include_router(admin_router)

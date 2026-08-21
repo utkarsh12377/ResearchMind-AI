@@ -43,3 +43,6 @@ Thumbs.db
 
 # --- Docker ---
 docker-compose.override.yml
+
+# Real Kubernetes secrets. secret.example.yaml is the committed template.
+infra/k8s/**/secret.yaml
