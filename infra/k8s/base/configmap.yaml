@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: researchmind-config
+  namespace: researchmind
+data:
+  APP_ENV: "production"
+  APP_DEBUG: "false"
+  API_V1_PREFIX: "/api/v1"
+
+  # Backends. Every one of these is a pluggable interface with an offline
+  # default; production names the real implementation explicitly rather than
+  # inheriting whatever the code falls back to.
+  EMBEDDING_PROVIDER: "openai"
+  VECTOR_STORE_BACKEND: "qdrant"
+  RERANKER_BACKEND: "cross-encoder"
+  GRAPH_STORE_BACKEND: "neo4j"
+  DEFAULT_LLM_PROVIDER: "anthropic"
+  FALLBACK_LLM_PROVIDER: "openai"
+
+  QDRANT_URL: "http://qdrant:6333"
+  QDRANT_COLLECTION: "researchmind_chunks"
+  NEO4J_URI: "bolt://neo4j:7687"
+  NEO4J_USER: "neo4j"
+
+  REDIS_URL: "redis://redis:6379/0"
+  CELERY_BROKER_URL: "redis://redis:6379/1"
+  CELERY_RESULT_BACKEND: "redis://redis:6379/2"
+
+  STORAGE_LOCAL_PATH: "/app/storage"
+  METRICS_ENABLED: "true"
+  SECURITY_HEADERS_ENABLED: "true"
+  OCR_ENABLED: "true"
+  BACKEND_CORS_ORIGINS: '["https://researchmind.example.com"]'

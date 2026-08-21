@@ -1,0 +1,42 @@
+# Migrations run as a Job rather than in the container entrypoint.
+#
+# With two API replicas, an entrypoint migration means two processes racing to
+# take the same Alembic lock on every rollout. A Job runs once, and the deploy
+# waits on it, so a failed migration stops the rollout instead of leaving one
+# replica on the new schema and one on the old.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  namespace: researchmind
+  annotations:
+    # Replace on each deploy so the Job name stays stable and the manifest is
+    # idempotent; CI deletes the completed Job before re-applying.
+    kubernetes.io/description: "Alembic upgrade head"
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: alembic
+          image: ghcr.io/utkarsh12377/researchmind-backend:latest
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: researchmind-config
+            - secretRef:
+                name: researchmind-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
